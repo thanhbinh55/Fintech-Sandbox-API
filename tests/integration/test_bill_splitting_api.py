@@ -56,3 +56,4 @@ def test_bill_splitting_full_api_flow(client, user_headers, agent_headers):
     assert status_data["total_collected_vnd"] == 180000  # An's 90k + Bình's 90k
     assert status_data["remaining_to_collect_vnd"] == 90000  # Cường remaining
     assert status_data["is_fully_settled"] is False
+

@@ -110,3 +110,4 @@ Tokens encode:
 - `POST /v1/demo/simulate-incoming`: Simulate external deposit into user wallet/bank.
 - `POST /v1/demo/simulate-failure`: Force simulated failure on next payment.
 - `GET /v1/events`: Query audit event log.
+

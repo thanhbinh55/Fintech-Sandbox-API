@@ -43,3 +43,4 @@ def readiness_check(request: Request, db: Session = Depends(get_db)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             media_type="application/json",
         )
+

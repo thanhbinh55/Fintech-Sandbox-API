@@ -41,3 +41,4 @@ def test_reset_demo_session(client, user_headers, demo_session):
     body = res.json()
     assert body["success"] is True
     assert body["data"]["id"] == demo_session.id
+

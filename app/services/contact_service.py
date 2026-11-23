@@ -113,3 +113,4 @@ class ContactService:
             bank_name=contact.bank_name,
             created_at=contact.created_at,
         )
+

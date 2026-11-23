@@ -65,3 +65,4 @@ class PaymentApproval(Base):
 
     payment_intent = relationship("PaymentIntent", back_populates="approval")
     approved_quote = relationship("PaymentQuote", foreign_keys=[approved_quote_id])
+

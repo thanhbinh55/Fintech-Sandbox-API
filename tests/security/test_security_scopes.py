@@ -90,3 +90,4 @@ def test_cross_session_isolation(client):
         headers={"Authorization": f"Bearer {s1_token}"},
     )
     assert intent_cross.status_code == 404
+

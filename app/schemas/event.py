@@ -23,3 +23,4 @@ class SimulateIncomingRequest(BaseModel):
 
 class SimulateFailureRequest(BaseModel):
     failure_reason: str = Field(default="SIMULATED_NETWORK_TIMEOUT", description="Reason for simulated failure")
+

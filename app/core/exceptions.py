@@ -114,3 +114,4 @@ class CrossSessionAccessException(FintechSandboxException):
             message="Cross-session access detected and blocked. Resource belongs to another demo session.",
             status_code=status.HTTP_403_FORBIDDEN,
         )
+

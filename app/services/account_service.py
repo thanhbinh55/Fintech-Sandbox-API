@@ -100,3 +100,4 @@ class AccountService:
             enabled=acc.enabled,
             icon_hint=icon_hint,
         )
+

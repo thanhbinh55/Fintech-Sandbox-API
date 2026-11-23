@@ -52,3 +52,4 @@ def test_full_payment_lifecycle_api(client, user_headers, agent_headers):
     assert tx_res.status_code == 200
     tx_list = tx_res.json()["data"]
     assert any(tx["payment_intent_id"] == intent_id for tx in tx_list)
+

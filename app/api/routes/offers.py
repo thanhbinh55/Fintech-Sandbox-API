@@ -33,3 +33,4 @@ def get_offer(
 ):
     offer = OfferService.get_offer_by_id(db, payload.session_id, offer_id)
     return {"success": True, "data": offer, "request_id": _req_id(request)}
+

@@ -108,3 +108,4 @@ def get_payment_intent_status(
         },
         "request_id": _req_id(request),
     }
+

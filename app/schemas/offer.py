@@ -19,3 +19,4 @@ class OfferResponse(BaseModel):
     expires_at: datetime
     active: bool
     is_fictional_demo: bool = True
+

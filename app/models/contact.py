@@ -22,3 +22,4 @@ class Contact(Base):
     demo_session = relationship("DemoSession", back_populates="contacts")
     owner = relationship("User", back_populates="contacts")
     recipient_account = relationship("Account", foreign_keys=[recipient_account_id])
+

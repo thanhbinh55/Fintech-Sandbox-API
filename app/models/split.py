@@ -83,3 +83,4 @@ class SplitCollectionRequest(Base):
 
     split_bill = relationship("SplitBill", back_populates="collection_requests")
     participant = relationship("SplitParticipant")
+

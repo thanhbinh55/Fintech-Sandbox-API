@@ -24,6 +24,7 @@ from app.models import (
     PaymentQuote,
     Transaction,
 )
+from app.providers import ProviderPaymentRequest, get_payment_provider
 from app.schemas.payment import (
     PaymentApprovalResponse,
     PaymentExecuteResponse,
@@ -348,19 +349,21 @@ class PaymentService:
         discount_given = snapshot.get("immediate_discount_vnd", 0)
         amount_to_debit = snapshot["amount_debited_vnd"]
 
-        # 4. Atomic ledger mutation
+        # 4. Atomic provider execution
         try:
-            tx = LedgerService.execute_transfer(
-                db=db,
+            payment_provider = get_payment_provider()
+            provider_req = ProviderPaymentRequest(
                 session_id=session_id,
+                payment_intent_id=intent.id,
                 source_account_id=source_acc_id,
                 destination_account_id=dest_acc_id,
                 amount_vnd=amount_to_transfer,
                 fee_vnd=fee_to_charge,
                 immediate_discount_vnd=discount_given,
-                payment_intent_id=intent.id,
+                description=intent.description,
                 idempotency_key=idempotency_key,
             )
+            provider_res = payment_provider.execute_payment(db, provider_req)
 
             intent.status = "SIMULATED_SUCCESS"
             intent.updated_at = now
@@ -375,7 +378,10 @@ class PaymentService:
                 entity_type="PAYMENT_INTENT",
                 entity_id=intent.id,
                 metadata={
-                    "transaction_id": tx.id,
+                    "transaction_id": provider_res.transaction_id,
+                    "provider": provider_res.provider_name,
+                    "provider_reference_id": provider_res.provider_reference_id,
+                    "fallback_used": provider_res.fallback_used,
                     "amount_vnd": amount_to_transfer,
                     "fee_vnd": fee_to_charge,
                     "source_id": source_acc_id,
@@ -384,15 +390,18 @@ class PaymentService:
 
             res = PaymentExecuteResponse(
                 payment_intent_id=intent.id,
-                transaction_id=tx.id,
+                transaction_id=provider_res.transaction_id,
                 status="SIMULATED_SUCCESS",
                 amount_transferred_vnd=amount_to_transfer,
                 fee_vnd=fee_to_charge,
                 amount_debited_vnd=amount_to_debit,
                 source_account_id=source_acc_id,
                 recipient_account_id=dest_acc_id,
-                completed_at=now,
-                message="Simulated transfer executed successfully in sandbox.",
+                completed_at=provider_res.completed_at,
+                provider_name=provider_res.provider_name,
+                provider_reference_id=provider_res.provider_reference_id,
+                fallback_used=provider_res.fallback_used,
+                message=provider_res.message,
             )
 
             # Store idempotency record if key provided

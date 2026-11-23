@@ -62,6 +62,14 @@ def get_collection_request_qr(
         from app.core.exceptions import ResourceNotFoundException
         raise ResourceNotFoundException("SplitCollectionRequest", request_id)
 
+    is_vietqr = col_req.is_external_payment_rail
+    notice = (
+        "VIETQR STANDARD DISPLAY QR: Generated per NAPAS EMVCo QR specifications. "
+        "This external QR is for mobile banking display and does NOT auto-settle the sandbox ledger."
+        if is_vietqr
+        else "Sandbox QR payload for internal test payments only. Real banking QR is not generated."
+    )
+
     return {
         "success": True,
         "data": {
@@ -70,8 +78,10 @@ def get_collection_request_qr(
             "requested_amount_vnd": col_req.requested_amount_vnd,
             "qr_payload": col_req.qr_payload,
             "sandbox_payment_link": col_req.sandbox_payment_link,
+            "provider_name": col_req.provider_name,
+            "is_external_payment_rail": col_req.is_external_payment_rail,
             "status": col_req.status,
-            "simulation_note": "Sandbox QR payload for internal test payments only. Real banking QR is not generated.",
+            "simulation_note": notice,
         },
         "request_id": _req_id(request),
     }
@@ -94,3 +104,4 @@ def settle_collection_share(
         amount_collected_vnd=settle_req.collected_amount_vnd,
     )
     return {"success": True, "data": res, "request_id": _req_id(request)}
+

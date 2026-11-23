@@ -27,3 +27,4 @@ class Offer(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     demo_session = relationship("DemoSession", back_populates="offers")
+

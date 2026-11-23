@@ -22,3 +22,4 @@ class DemoSession(Base):
     accounts = relationship("Account", back_populates="demo_session", cascade="all, delete-orphan")
     contacts = relationship("Contact", back_populates="demo_session", cascade="all, delete-orphan")
     offers = relationship("Offer", back_populates="demo_session", cascade="all, delete-orphan")
+

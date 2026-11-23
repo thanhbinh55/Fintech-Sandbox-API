@@ -26,3 +26,4 @@ class TransactionResponse(BaseModel):
     created_at: datetime
     completed_at: Optional[datetime] = None
     ledger_entries: List[LedgerEntryResponse] = Field(default_factory=list)
+

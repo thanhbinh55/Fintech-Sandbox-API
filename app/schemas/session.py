@@ -25,3 +25,4 @@ class DemoSessionResponse(BaseModel):
     expires_at: datetime
     credentials: Optional[SessionCredentials] = None
     simulation_notice: str = "ALL BALANCES AND TRANSACTIONS ARE FICTIONAL SANDBOX DATA FOR EVALUATION PURPOSES ONLY."
+

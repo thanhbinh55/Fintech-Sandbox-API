@@ -34,3 +34,4 @@ class ContactSearchResponse(BaseModel):
     matches: List[ContactResponse]
     is_ambiguous: bool
     clarification_message: Optional[str] = None
+

@@ -63,3 +63,4 @@ class OfferService:
             expires_at=offer.expires_at,
             active=offer.active,
         )
+

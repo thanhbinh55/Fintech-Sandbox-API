@@ -226,3 +226,4 @@ def seed_demo_data(db: Session, session: DemoSession, scenario: str = "scenario_
     db.flush()
 
     return primary_user
+

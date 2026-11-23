@@ -169,3 +169,4 @@ erDiagram
 ### 2.12 AuditEvent & IdempotencyRecord
 - `AuditEvent`: `id`, `demo_session_id`, `actor_type` (`USER`, `AGENT`, `SYSTEM`), `actor_id`, `event_type`, `entity_type`, `entity_id`, `metadata` (JSONB), `created_at`.
 - `IdempotencyRecord`: `id`, `demo_session_id`, `scope_key`, `idempotency_key`, `request_hash`, `status_code`, `response_payload` (JSONB), `created_at`, `expires_at`.
+

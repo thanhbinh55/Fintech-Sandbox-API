@@ -114,3 +114,4 @@ require_user_scope = ScopeChecker(["user"])
 require_agent_or_user_scope = ScopeChecker(["user", "agent"])
 require_demo_control_scope = ScopeChecker(["demo-control"])
 require_any_scope = ScopeChecker(["user", "agent", "demo-control"])
+

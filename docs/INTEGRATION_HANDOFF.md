@@ -30,6 +30,7 @@ The **Fintech Sandbox API** is an independent, stateful simulation backend of a 
 - **Currencies & Precision:** Strictly 64-bit non-negative integer VND (`BigInteger`). Floats are rejected.
 - **State Machine:** Monotonic states (`DRAFT` -> `QUOTED` -> `AWAITING_APPROVAL` -> `APPROVED` -> `PROCESSING` -> `SIMULATED_SUCCESS`).
 - **Security:** Scoped HMAC-SHA256 bearer tokens separating `agent` (read/draft only) from `user` (human approval/execution) and `demo-control` (session lifecycle).
+- **Provider Architecture:** Extensible adapters for Payment (`InternalSimulationProvider`, `SePaySandboxProvider`) and QR (`InternalSandboxQRProvider`, `VietQRProvider`) configured via environment variables with zero breaking changes to existing contracts. See [docs/PROVIDER_INTEGRATION.md](file:///Users/ngovietthanhbinh/Project/Fintech-Sandbox-API/docs/PROVIDER_INTEGRATION.md).
 
 ---
 
@@ -224,3 +225,4 @@ python -m scripts.smoke_test
 # 4. Re-export OpenAPI JSON schema
 python -m scripts.export_openapi
 ```
+

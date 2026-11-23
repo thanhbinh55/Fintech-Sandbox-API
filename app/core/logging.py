@@ -16,3 +16,4 @@ def setup_logging(debug: bool = True) -> logging.Logger:
 
 
 logger = setup_logging()
+

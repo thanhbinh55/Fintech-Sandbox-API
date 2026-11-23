@@ -30,3 +30,4 @@ class AuditService:
         db.add(event)
         db.flush()
         return event
+

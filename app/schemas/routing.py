@@ -12,3 +12,4 @@ class RoutingCalculationResponse(BaseModel):
     recommended_quote_id: str
     recommendation_summary: str
     computed_at: datetime
+

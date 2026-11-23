@@ -35,3 +35,4 @@ class AmbiguousRecipientError(FintechSandboxError):
 
 class QuoteExpiredError(FintechSandboxError):
     pass
+

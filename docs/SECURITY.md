@@ -29,3 +29,4 @@ The system enforces three permission tiers:
    - Mutating execution endpoints accept an `idempotency_key`. Repeating a request with the same key returns the existing transaction result without duplicating debits or ledger writes.
 4. **Zero Live Credential Exposure:**
    - The sandbox contains fictional financial records only. No real bank PINs, OTPs, or passwords are stored or requested.
+

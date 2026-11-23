@@ -155,3 +155,4 @@ def test_e2e_07_demo_session_isolation_and_reset(client, user_headers, demo_sess
     sources = client.get("/v1/payment-sources", headers={"Authorization": f"Bearer {data['credentials']['user_token']}"}).json()["data"]
     wallet = next(s for s in sources if s["account_type"] == "EWALLET")
     assert wallet["available_funds_vnd"] == 1500000
+

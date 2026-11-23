@@ -46,3 +46,4 @@ def create_contact(
 ):
     contact = ContactService.create_contact(db, payload.session_id, payload.user_id, req)
     return {"success": True, "data": contact, "request_id": _req_id(request)}
+

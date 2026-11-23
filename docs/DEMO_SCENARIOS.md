@@ -79,3 +79,4 @@ When Bình pays via sandbox link:
 - **Duplicate Execution (E2E-06):** Retrying `execute` with the same `idempotency_key` safely returns the cached transaction without double-debiting.
 - **Cross-Session Isolation (Security):** User in Session 1 accessing resources from Session 2 receives HTTP 404 or 403.
 - **Session Reset (E2E-07):** Calling `POST /v1/demo/reset` instantly restores all accounts, contacts, and balances to the initial seed state.
+

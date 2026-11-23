@@ -78,4 +78,8 @@ class PaymentExecuteResponse(BaseModel):
     source_account_id: str
     recipient_account_id: str
     completed_at: datetime
+    provider_name: str = "internal_simulation"
+    provider_reference_id: Optional[str] = None
+    fallback_used: bool = False
     message: str = "Simulated transfer executed successfully in sandbox."
+

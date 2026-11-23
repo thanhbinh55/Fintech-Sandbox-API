@@ -27,3 +27,4 @@ class PaginationMeta(BaseModel):
     total_count: int
     limit: int
     offset: int
+

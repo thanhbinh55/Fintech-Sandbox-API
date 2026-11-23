@@ -14,6 +14,7 @@ from app.models import (
     SplitItem,
     SplitParticipant,
 )
+from app.providers import ProviderQRRequest, get_qr_provider
 from app.schemas.split import (
     SplitBillCreate,
     SplitBillResponse,
@@ -189,15 +190,21 @@ class SplitService:
                 p.status = "PENDING"
 
         # 5. Generate Collection Requests for participants who owe money
+        qr_provider = get_qr_provider()
         for p in participants_list:
             if p.id != split_bill.payer_participant_id and p.share_amount_vnd > 0:
                 req_id = str(uuid.uuid4())
                 payer_part = next(pt for pt in participants_list if pt.id == split_bill.payer_participant_id)
-                qr_text = (
-                    f"SANDBOX_VND_PAYMENT:split_bill_id={bill_id}&request_id={req_id}&"
-                    f"amount={p.share_amount_vnd}&recipient={payer_part.display_name}"
+
+                qr_req = ProviderQRRequest(
+                    split_bill_id=bill_id,
+                    collection_request_id=req_id,
+                    participant_name=p.display_name,
+                    requested_amount_vnd=p.share_amount_vnd,
+                    recipient_name=payer_part.display_name,
+                    description=f"Share of {split_bill.title}",
                 )
-                link = f"https://sandbox.wallet.local/pay/split/{req_id}"
+                qr_res = qr_provider.generate_collection_qr(qr_req)
 
                 col_req = SplitCollectionRequest(
                     id=req_id,
@@ -206,8 +213,8 @@ class SplitService:
                     requested_amount_vnd=p.share_amount_vnd,
                     collected_amount_vnd=0,
                     status="UNPAID",
-                    qr_payload=qr_text,
-                    payment_link=link,
+                    qr_payload=qr_res.qr_payload,
+                    payment_link=qr_res.payment_link,
                     created_at=now,
                     updated_at=now,
                 )
@@ -375,6 +382,7 @@ class SplitService:
 
         collection_requests = []
         for cr in bill.collection_requests:
+            is_external = "img.vietqr.io" in cr.payment_link
             collection_requests.append(
                 SplitCollectionRequestResponse(
                     request_id=cr.id,
@@ -385,6 +393,8 @@ class SplitService:
                     status=cr.status,
                     sandbox_payment_link=cr.payment_link,
                     qr_payload=cr.qr_payload,
+                    provider_name="vietqr" if is_external else "internal_sandbox",
+                    is_external_payment_rail=is_external,
                     created_at=cr.created_at,
                 )
             )

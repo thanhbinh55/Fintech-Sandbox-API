@@ -85,3 +85,4 @@ class SplitStatus(BaseModel):
     remaining_to_collect_vnd: int
     is_fully_settled: bool
     participant_statuses: List[Dict[str, Any]]
+

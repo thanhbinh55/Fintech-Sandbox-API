@@ -52,6 +52,8 @@ class SplitCollectionRequestResponse(BaseModel):
     status: str  # UNPAID, PAID, CANCELLED
     sandbox_payment_link: str
     qr_payload: str
+    provider_name: str = "internal_sandbox"
+    is_external_payment_rail: bool = False
     created_at: datetime
 
 
@@ -84,3 +86,4 @@ class SplitSettleRequest(BaseModel):
         default=None,
         description="Amount collected in VND. If omitted, marks full remaining amount as paid.",
     )
+

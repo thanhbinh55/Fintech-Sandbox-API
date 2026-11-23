@@ -25,3 +25,4 @@ class Account(Base):
     demo_session = relationship("DemoSession", back_populates="accounts")
     owner = relationship("User", back_populates="accounts")
     ledger_entries = relationship("LedgerEntry", back_populates="account")
+

@@ -61,3 +61,4 @@ Deterministic tie-breaking:
 - Invariants:
   $$\sum \text{participant\_shares} = \text{bill\_total}$$
   $$\sum \text{collected\_amounts} \le \text{collection\_requests}$$
+

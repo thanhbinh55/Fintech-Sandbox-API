@@ -12,11 +12,12 @@
 
 The **Fintech Sandbox API** is fully implemented, verified, tested, documented, and prepared for deployment.
 - **REST APIs (`/v1`):** 16 production endpoints covering session management, account queries, contact resolution, payment intent lifecycle, smart routing quotes, promotional offers, group bill splitting, transactions, and audit logs.
+- **Provider-Based Architecture:** Modular provider interfaces for Payment (`PaymentProvider`: `InternalSimulationProvider` and `SePaySandboxProvider`) and Collection QR (`QRProvider`: `InternalSandboxQRProvider` and `VietQRProvider`). Environment-based switching with fault-tolerant safe fallback so external network errors never break demo sessions.
 - **Deterministic Smart Routing:** Formula-driven ranking of payment sources combining processing fees, instant discounts, and delayed cashback with machine-readable explanation codes.
 - **Exact Integer VND Bill Splitting:** Zero-floating-point arithmetic guaranteeing $\sum \text{shares} = \text{total}$ with deterministic remainder allocation and proportional tax/discount distribution.
 - **Double-Entry Ledger:** Atomic debit/credit tracking with simulated clearing accounts for fees and promotional subsidies.
 - **Security & Scopes:** Strict role-based isolation enforcing that the AI Agent can only prepare and quote payments, while human user approval is cryptographically verified before execution.
-- **Testing:** 28 automated tests passing with 92% code coverage.
+- **Testing:** 36 automated tests passing, 1 conditionally skipped (live SePay smoke test when credentials are not in environment). 92% code coverage.
 - **Developer B Experience:** Agent-facing Python SDK (`fintech_sandbox_client`), Gemini Function Calling Guide, runnable examples, and exhaustive OpenAPI 3.1 documentation.
 
 ---

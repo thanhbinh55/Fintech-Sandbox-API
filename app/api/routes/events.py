@@ -48,3 +48,4 @@ def get_audit_events(
     ]
 
     return {"success": True, "data": data, "request_id": _req_id(request)}
+

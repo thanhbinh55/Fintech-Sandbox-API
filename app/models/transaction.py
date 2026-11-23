@@ -38,3 +38,4 @@ class LedgerEntry(Base):
 
     transaction = relationship("Transaction", back_populates="ledger_entries")
     account = relationship("Account", back_populates="ledger_entries")
+
