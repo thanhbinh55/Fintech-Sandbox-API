@@ -118,3 +118,4 @@ The provider abstraction was introduced without changing any endpoint paths, req
 - `POST /v1/payment-intents/{id}/execute` returns the exact same `PaymentExecuteResponse`, with optional non-breaking provider fields (`provider_name`, `provider_reference_id`, `fallback_used`).
 - `GET /v1/split-bills/{id}/requests/{req_id}/qr` returns `qr_payload`, `sandbox_payment_link`, and adds `provider_name` and `is_external_payment_rail`.
 - Developer B's Python SDK client (`FintechSandboxClient`) and tool declarations require zero modifications.
+

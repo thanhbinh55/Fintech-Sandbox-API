@@ -3,3 +3,4 @@ from app.providers.qr.internal_sandbox_qr_provider import InternalSandboxQRProvi
 from app.providers.qr.vietqr_provider import VietQRProvider
 
 __all__ = ["InternalSandboxQRProvider", "VietQRProvider"]
+

@@ -24,3 +24,4 @@ class InternalSandboxQRProvider(QRProvider):
             is_external_payment_rail=False,
             notice="Sandbox simulated QR payload for internal test payments only. Real banking QR is not generated.",
         )
+

@@ -89,3 +89,4 @@ class VietQRProvider(QRProvider):
                 "This external QR is for mobile banking display and does NOT auto-settle the sandbox ledger."
             ),
         )
+
