@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fintech_sandbox_db
+    restart: always
+    environment:
+      POSTGRES_USER: fintech
+      POSTGRES_PASSWORD: fintech_secret
+      POSTGRES_DB: fintech_sandbox
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fintech -d fintech_sandbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: fintech_sandbox_api
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://fintech:fintech_secret@db:5432/fintech_sandbox
+      SECRET_KEY: demo_dev_secret_key_change_in_production_32bytes_min!
+      HOST: 0.0.0.0
+      PORT: 8000
+      DEBUG: "true"
+      ENVIRONMENT: development
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
