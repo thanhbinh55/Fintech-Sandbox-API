@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MoMo AI Financial Copilot Workspace</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse-ring {
+      0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(216, 45, 139, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 16px rgba(216, 45, 139, 0); }
+      100% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(216, 45, 139, 0); }
+    }
+    .recording-pulse { animation: pulse-ring 1.4s infinite; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen font-sans">
+  <div class="max-w-7xl mx-auto px-4 py-5 space-y-5">
+
+    <!-- Top Workspace Header & Controls -->
+    <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-pink-600 to-fuchsia-700 text-white font-bold text-xl flex items-center justify-center shadow">M</div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold text-slate-900">MoMo AI Financial Copilot Workspace</h1>
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-pink-100 text-pink-700">Human-in-the-Loop</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">
+            Voice: <span class="font-semibold text-slate-700">Gipformer 1.5 (VAD + Financial ITN)</span> •
+            Agent: <span id="llmBadge" class="font-semibold text-indigo-700">Gemini + Guardrails</span> •
+            Core: <span id="sandboxBadge" class="font-semibold text-emerald-700">Fintech Sandbox Ledger</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <select id="scenarioSelect" class="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold bg-slate-50 focus:ring-2 focus:ring-pink-500">
+          <option value="scenario_a">Scenario A: Chuyển tiền & Trùng tên</option>
+          <option value="scenario_b">Scenario B: Smart Payment Routing</option>
+          <option value="scenario_c">Scenario C: Chia hóa đơn nhóm</option>
+        </select>
+        <button id="resetBtn" class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition">
+          Reset Demo Session
+        </button>
+        <div id="healthPill" class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-200 text-slate-700">Đang kết nối...</div>
+      </div>
+    </header>
+
+    <!-- Live Double-Entry Account Balances Strip -->
+    <section id="balancesStrip" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></section>
+
+    <!-- Main 2-Column Workspace -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+      <!-- Left Column (5 cols): Voice Mic + Multi-Turn Chat + Sample Prompts -->
+      <section class="lg:col-span-5 flex flex-col gap-4">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-[560px]">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Hội thoại Voice / Text (Agent Token)</h2>
+            <span id="sessionIdPill" class="text-[11px] font-mono text-slate-400">session: ...</span>
+          </div>
+
+          <!-- Chat Feed -->
+          <div id="chatFeed" class="flex-1 overflow-y-auto py-3 space-y-3 pr-1">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600">
+              Xin chào! Tôi là <b>MoMo AI Financial Copilot</b>. Hãy bấm Micro để nói hoặc chọn kịch bản mẫu bên dưới:
+              <ul class="list-disc ml-4 mt-1.5 space-y-0.5">
+                <li><b>Chuyển tiền & làm rõ:</b> <i>"Chuyển cho Minh một trăm năm mươi ca tiền ăn tối"</i></li>
+                <li><b>Smart Routing:</b> <i>"Chuyển cho Lan hai lít, chọn nguồn tiền có lợi nhất"</i></li>
+                <li><b>Chia bill:</b> <i>"Chia hóa đơn cơm trưa 180k, An trả trước: 3 cơm 50k chia đều An Bình Cường, 1 nước cam 30k cho An"</i></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Disambiguation Quick Chips -->
+          <div id="disambigBox" class="hidden py-2 flex flex-wrap gap-1.5 border-t border-slate-100"></div>
+
+          <!-- Mic + Input Bar -->
+          <div class="pt-3 border-t border-slate-100 flex items-center gap-2">
+            <button
+              id="recordBtn"
+              title="Giữ/Bấm để nói bằng tiếng Việt"
+              class="shrink-0 w-12 h-12 rounded-full bg-pink-600 hover:bg-pink-700 text-white flex items-center justify-center shadow transition focus:outline-none"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+            <input
+              id="chatInput"
+              type="text"
+              placeholder="Hoặc gõ lệnh tiếng Việt tại đây..."
+              class="flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-pink-500 outline-none"
+            />
+            <button id="sendBtn" class="shrink-0 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold transition">
+              Gửi
+            </button>
+          </div>
+          <p id="micStatus" class="text-[11px] text-slate-400 mt-1.5">Bấm Mic để bắt đầu nói, bấm lại để gửi vào Gipformer + ITN.</p>
+        </div>
+
+        <!-- Sample Scenarios -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-2">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Kịch bản thử nhanh (Bấm để gửi)</h3>
+          <div class="grid grid-cols-1 gap-1.5 text-xs">
+            <button class="sample-btn text-left p-2 rounded-lg bg-slate-50 hover:bg-pink-50 border border-slate-200 hover:border-pink-300 transition">
+              Chuyển cho Minh một trăm năm mươi ca tiền ăn tối
+            </button>
+            <button class="sample-btn text-left p-2 rounded-lg bg-slate-50 hover:bg-pink-50 border border-slate-200 hover:border-pink-300 transition">
+              Chuyển cho Lan hai lít, chọn nguồn tiền có lợi nhất
+            </button>
+            <button class="sample-btn text-left p-2 rounded-lg bg-slate-50 hover:bg-pink-50 border border-slate-200 hover:border-pink-300 transition">
+              Tạo chia hóa đơn Bữa trưa nhóm, An đã trả trước: 3 phần cơm 50k chia đều cho An Bình Cường, và 1 nước cam 30k riêng cho An
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column (7 cols): Human-in-the-Loop Approval, Routing, Split Bill, Trace -->
+      <section class="lg:col-span-7 space-y-4">
+        <div id="errorBanner" class="hidden rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700"></div>
+
+        <!-- Payment Draft & Smart Routing Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Thẻ Duyệt Giao Dịch & Smart Payment Routing</h2>
+            <span id="draftStatusBadge" class="hidden px-2.5 py-0.5 rounded-full text-[11px] font-bold"></span>
+          </div>
+
+          <div id="noDraftState" class="py-8 text-center text-xs text-slate-400">
+            Chưa có bản nháp chuyển khoản nào. AI sẽ tạo nháp (`DRAFT`) & lấy bảng xếp hạng nguồn tiền (`QUOTED`) tại đây — tiền chỉ đi khi bạn bấm xác nhận.
+          </div>
+
+          <div id="draftPanel" class="hidden space-y-4">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs">
+              <div>
+                <p class="text-slate-400">Người nhận</p>
+                <p id="dRecipient" class="font-bold text-slate-900 mt-0.5">—</p>
+              </div>
+              <div>
+                <p class="text-slate-400">Mã tài khoản đích</p>
+                <p id="dAccountId" class="font-mono text-slate-700 mt-0.5 truncate">—</p>
+              </div>
+              <div>
+                <p class="text-slate-400">Số tiền gốc</p>
+                <p id="dAmount" class="font-bold text-pink-600 text-sm mt-0.5">—</p>
+              </div>
+              <div>
+                <p class="text-slate-400">Nội dung</p>
+                <p id="dNote" class="font-medium text-slate-800 mt-0.5">—</p>
+              </div>
+            </div>
+
+            <!-- Ranked Quotes -->
+            <div>
+              <p class="text-xs font-semibold text-slate-700 mb-2">Chọn nguồn thanh toán (Xếp hạng theo chi phí hiệu quả):</p>
+              <div id="quotesList" class="space-y-2"></div>
+            </div>
+
+            <!-- Human Approval Button -->
+            <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+              <p class="text-[11px] text-slate-500">Quyền thực thi tách biệt: Chỉ <code>user_token</code> mới gọi được <code>approve + execute</code>.</p>
+              <button id="approveExecuteBtn" class="px-5 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-sm font-bold shadow transition disabled:opacity-50">
+                Xác nhận & Thanh toán ngay
+              </button>
+            </div>
+
+            <div id="executionReceipt" class="hidden rounded-xl bg-emerald-50 border border-emerald-200 p-3.5 text-xs text-emerald-900"></div>
+          </div>
+        </div>
+
+        <!-- Split Bill Card -->
+        <div id="splitCard" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Chia Hóa Đơn Chính Xác (Integer VND)</h2>
+              <p id="splitTitle" class="text-sm font-bold text-slate-900 mt-0.5">—</p>
+            </div>
+            <span id="splitStatusBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">ACTIVE</span>
+          </div>
+          <div id="splitShares" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs"></div>
+          <div id="splitCollections" class="space-y-2 pt-2 border-t border-slate-100"></div>
+        </div>
+
+        <!-- Agent & Guardrails Trace -->
+        <details class="bg-slate-900 text-slate-100 rounded-2xl p-4 text-xs" open>
+          <summary class="cursor-pointer font-semibold text-slate-300 select-none flex items-center justify-between">
+            <span>Telemetry: Gipformer ASR → Financial ITN → Guardrails & Tool Trace</span>
+            <span id="latencyPill" class="font-mono text-[11px] text-emerald-400"></span>
+          </summary>
+          <div id="itnBox" class="hidden mt-3 p-2.5 rounded-lg bg-slate-800 text-[11px] font-mono space-y-1"></div>
+          <pre id="traceBox" class="mt-3 overflow-x-auto font-mono text-[11px] leading-relaxed text-emerald-300 max-h-60">Chưa có lượt chạy nào.</pre>
+        </details>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    let currentSessionId = null;
+    let selectedQuoteId = null;
+    let activeIntentId = null;
+
+    const chatFeed = document.getElementById("chatFeed");
+    const chatInput = document.getElementById("chatInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const recordBtn = document.getElementById("recordBtn");
+    const micStatus = document.getElementById("micStatus");
+    const scenarioSelect = document.getElementById("scenarioSelect");
+    const resetBtn = document.getElementById("resetBtn");
+
+    function fmtVND(v) {
+      if (v == null) return "—";
+      return new Intl.NumberFormat("vi-VN").format(v) + " đ";
+    }
+
+    function showError(msg) {
+      const b = document.getElementById("errorBanner");
+      b.textContent = msg;
+      b.classList.remove("hidden");
+    }
+    function hideError() {
+      document.getElementById("errorBanner").classList.add("hidden");
+    }
+
+    function renderAccounts(accounts) {
+      const strip = document.getElementById("balancesStrip");
+      strip.innerHTML = (accounts || []).map((a) => `
+        <div class="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">${a.account_type}</p>
+            <p class="text-sm font-bold text-slate-800 mt-0.5">${a.display_name}</p>
+            <p class="text-[11px] font-mono text-slate-400">${a.account_number}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-base font-extrabold text-pink-600">${fmtVND(a.available_balance_vnd)}</p>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function appendMessage(role, text, meta = null) {
+      const div = document.createElement("div");
+      if (role === "user") {
+        div.className = "ml-8 bg-pink-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2.5 text-xs shadow-sm";
+        div.innerHTML = `<p>${text}</p>`;
+        if (meta) {
+          div.innerHTML += `<p class="mt-1 text-[10px] text-pink-100 font-mono">${meta}</p>`;
+        }
+      } else {
+        div.className = "mr-8 bg-slate-100 text-slate-800 rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-xs border border-slate-200 whitespace-pre-line";
+        div.textContent = text;
+      }
+      chatFeed.appendChild(div);
+      chatFeed.scrollTop = chatFeed.scrollHeight;
+    }
+
+    async function checkHealth() {
+      const pill = document.getElementById("healthPill");
+      try {
+        const res = await fetch("/health");
+        const d = await res.json();
+        if (d.status === "ok" && d.stt_ready && d.sandbox_ok) {
+          pill.className = "px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-100 text-emerald-800";
+          pill.textContent = "All Systems Ready";
+        } else {
+          pill.className = "px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-100 text-amber-800";
+          pill.textContent = d.sandbox_ok ? "STT Loading" : "Sandbox Offline";
+        }
+      } catch {
+        pill.className = "px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-100 text-red-800";
+        pill.textContent = "Backend Offline";
+      }
+    }
+
+    async function initSession(scenario = "scenario_a") {
+      hideError();
+      try {
+        const res = await fetch("/api/session/init", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scenario }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Init session failed");
+        currentSessionId = data.session_id;
+        document.getElementById("sessionIdPill").textContent = "session: " + currentSessionId.slice(0, 8);
+        renderAccounts(data.accounts);
+        resetPanels();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    function resetPanels() {
+      activeIntentId = null;
+      selectedQuoteId = null;
+      document.getElementById("noDraftState").classList.remove("hidden");
+      document.getElementById("draftPanel").classList.add("hidden");
+      document.getElementById("draftStatusBadge").classList.add("hidden");
+      document.getElementById("executionReceipt").classList.add("hidden");
+      document.getElementById("splitCard").classList.add("hidden");
+      document.getElementById("disambigBox").classList.add("hidden");
+    }
+
+    resetBtn.addEventListener("click", async () => {
+      await initSession(scenarioSelect.value);
+      appendMessage("assistant", "Đã reset phiên demo về trạng thái số dư ban đầu.");
+    });
+
+    scenarioSelect.addEventListener("change", async () => {
+      await initSession(scenarioSelect.value);
+      appendMessage("assistant", `Đã chuyển sang ${scenarioSelect.options[scenarioSelect.selectedIndex].text}.`);
+    });
+
+    function renderWorkspaceState(data) {
+      if (data.accounts) renderAccounts(data.accounts);
+
+      // Disambiguation quick chips
+      const dBox = document.getElementById("disambigBox");
+      if (data.ambiguous_contacts && data.ambiguous_contacts.length > 0) {
+        dBox.classList.remove("hidden");
+        dBox.innerHTML = `<span class="text-[11px] text-slate-400 self-center mr-1">Chọn nhanh:</span>` +
+          data.ambiguous_contacts.map((c) => `
+            <button onclick="sendText('Chuyển cho ${c.display_name}')" class="px-2.5 py-1 rounded-full bg-pink-50 hover:bg-pink-100 border border-pink-200 text-pink-800 text-[11px] font-semibold">
+              ${c.display_name} (${c.bank_name || "MoMo"} • ${c.phone_number})
+            </button>
+          `).join("");
+      } else {
+        dBox.classList.add("hidden");
+      }
+
+      // Draft & Quotes
+      if (data.active_draft) {
+        const d = data.active_draft;
+        activeIntentId = d.id;
+        document.getElementById("noDraftState").classList.add("hidden");
+        document.getElementById("draftPanel").classList.remove("hidden");
+        const badge = document.getElementById("draftStatusBadge");
+        badge.classList.remove("hidden");
+        badge.textContent = d.status;
+        badge.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold " +
+          (d.status === "SIMULATED_SUCCESS" ? "bg-emerald-100 text-emerald-800" : "bg-indigo-100 text-indigo-800");
+
+        document.getElementById("dRecipient").textContent = d.recipient_display_name || "Người nhận";
+        document.getElementById("dAccountId").textContent = d.recipient_account_id || "—";
+        document.getElementById("dAmount").textContent = fmtVND(d.amount_vnd);
+        document.getElementById("dNote").textContent = d.description || "—";
+
+        const quotes = data.quotes || d.quotes || [];
+        const qList = document.getElementById("quotesList");
+        selectedQuoteId = null;
+        const rec = quotes.find((q) => q.recommended && q.eligible) || quotes.find((q) => q.eligible);
+        if (rec) selectedQuoteId = rec.id;
+
+        qList.innerHTML = quotes.map((q) => {
+          const checked = q.id === selectedQuoteId ? "checked" : "";
+          const disabled = !q.eligible ? "disabled" : "";
+          return `
+            <label class="block p-3 rounded-xl border ${q.recommended ? "border-pink-400 bg-pink-50/40" : "border-slate-200"} ${!q.eligible ? "opacity-50" : "cursor-pointer hover:border-pink-300"}">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <input type="radio" name="quoteChoice" value="${q.id}" ${checked} ${disabled} onchange="selectedQuoteId='${q.id}'" class="accent-pink-600" />
+                  <div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-bold text-xs text-slate-900">${q.source_display_name}</span>
+                      ${q.recommended ? `<span class="px-1.5 py-0.5 rounded bg-pink-600 text-white text-[10px] font-bold">Khuyên dùng #1</span>` : ""}
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-0.5">${q.eligibility_reason} • ${(q.applied_offer_names || []).join(", ") || "Không ưu đãi"}</p>
+                  </div>
+                </div>
+                <div class="text-right text-xs">
+                  <p class="font-extrabold text-slate-900">Hiệu quả: ${fmtVND(q.effective_cost_vnd)}</p>
+                  <p class="text-[10px] text-slate-500">Trừ ngay: ${fmtVND(q.amount_debited_vnd)} | Phí: ${fmtVND(q.fee_vnd)} | Hoàn: ${fmtVND(q.estimated_reward_vnd)}</p>
+                </div>
+              </div>
+            </label>
+          `;
+        }).join("");
+
+        const btn = document.getElementById("approveExecuteBtn");
+        btn.disabled = !selectedQuoteId || d.status === "SIMULATED_SUCCESS";
+      }
+
+      // Split Bill
+      if (data.active_split_bill) {
+        renderSplitBill(data.active_split_bill);
+      }
+
+      // Trace & ITN
+      const latParts = [];
+      if (data.stt_latency_ms != null) latParts.push(`STT ${data.stt_latency_ms}ms`);
+      if (data.llm_latency_ms != null) latParts.push(`Agent ${data.llm_latency_ms}ms`);
+      document.getElementById("latencyPill").textContent = latParts.join(" • ");
+
+      const itnBox = document.getElementById("itnBox");
+      if (data.raw_transcript) {
+        itnBox.classList.remove("hidden");
+        itnBox.innerHTML = `
+          <div><span class="text-slate-400">Raw ASR:</span> <span class="text-amber-300">${data.raw_transcript}</span></div>
+          <div><span class="text-slate-400">After ITN:</span> <span class="text-emerald-300">${data.normalized_transcript}</span></div>
+        `;
+      }
+      document.getElementById("traceBox").textContent = JSON.stringify(data.tool_trace || [], null, 2);
+    }
+
+    function renderSplitBill(bill) {
+      const card = document.getElementById("splitCard");
+      card.classList.remove("hidden");
+      document.getElementById("splitTitle").textContent = `${bill.title} • Tổng: ${fmtVND(bill.total_bill_amount_vnd)}`;
+      document.getElementById("splitStatusBadge").textContent = bill.status;
+      document.getElementById("splitStatusBadge").className =
+        "px-2.5 py-0.5 rounded-full text-[11px] font-bold " +
+        (bill.status === "SETTLED" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800");
+
+      document.getElementById("splitShares").innerHTML = (bill.participant_shares || []).map((s) => `
+        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-slate-800">${s.display_name} ${s.is_payer ? "(Payer)" : ""}</span>
+            <span class="text-[10px] font-bold ${s.status === "SETTLED" ? "text-emerald-600" : "text-amber-600"}">${s.status}</span>
+          </div>
+          <p class="text-sm font-extrabold text-pink-600 mt-1">${fmtVND(s.total_share_vnd)}</p>
+          <p class="text-[10px] text-slate-400">Còn nợ: ${fmtVND(s.remaining_balance_vnd)}</p>
+        </div>
+      `).join("");
+
+      document.getElementById("splitCollections").innerHTML = (bill.collection_requests || []).map((cr) => `
+        <div class="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 border border-slate-100">
+          <div>
+            <span class="font-semibold">${cr.participant_name}</span> cần trả <span class="font-bold text-pink-600">${fmtVND(cr.requested_amount_vnd)}</span>
+          </div>
+          ${cr.status === "PAID"
+            ? `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">ĐÃ THANH TOÁN</span>`
+            : `<button onclick="settleSplit('${bill.id}', '${cr.request_id}')" class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold">Giả lập thu tiền</button>`
+          }
+        </div>
+      `).join("");
+    }
+
+    async function settleSplit(splitId, requestId) {
+      hideError();
+      try {
+        const res = await fetch("/api/human/settle-split", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: currentSessionId, split_id: splitId, request_id: requestId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Settle failed");
+        renderSplitBill(data.split_bill);
+        if (data.accounts) renderAccounts(data.accounts);
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    document.getElementById("approveExecuteBtn").addEventListener("click", async () => {
+      if (!activeIntentId || !selectedQuoteId) return;
+      hideError();
+      const btn = document.getElementById("approveExecuteBtn");
+      btn.disabled = true;
+      btn.textContent = "Đang thực thi...";
+      try {
+        const res = await fetch("/api/human/approve-execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: currentSessionId,
+            payment_intent_id: activeIntentId,
+            quote_id: selectedQuoteId,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Execution failed");
+        renderAccounts(data.accounts);
+        const ex = data.execution;
+        const badge = document.getElementById("draftStatusBadge");
+        badge.textContent = ex.status;
+        badge.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800";
+        const receipt = document.getElementById("executionReceipt");
+        receipt.classList.remove("hidden");
+        receipt.innerHTML = `<b>Giao dịch thành công!</b> Mã GD: <code>${ex.transaction_id}</code> • Đã chuyển <b>${fmtVND(ex.amount_transferred_vnd)}</b> (Trừ từ nguồn: <b>${fmtVND(ex.amount_debited_vnd)}</b>). Số dư sổ cái kép đã được cập nhật ở trên.`;
+        appendMessage("assistant", `Bạn đã xác nhận và chuyển thành công ${fmtVND(ex.amount_transferred_vnd)}. Mã giao dịch: ${ex.transaction_id}.`);
+      } catch (err) {
+        showError(err.message);
+        btn.disabled = false;
+      } finally {
+        btn.textContent = "Xác nhận & Thanh toán ngay";
+      }
+    });
+
+    async function sendText(text) {
+      hideError();
+      if (!text.trim() || !currentSessionId) return;
+      appendMessage("user", text);
+      chatInput.value = "";
+      sendBtn.disabled = true;
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: currentSessionId, text }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Chat error");
+        appendMessage("assistant", data.assistant_reply);
+        renderWorkspaceState(data);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener("click", () => sendText(chatInput.value));
+    chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendText(chatInput.value); });
+    document.querySelectorAll(".sample-btn").forEach((b) => {
+      b.addEventListener("click", () => sendText(b.textContent.trim()));
+    });
+
+    // Mic recording (16kHz Mono PCM WAV)
+    let isRecording = false, audioCtx = null, mediaStream = null, scriptNode = null, audioChunks = [], inputSampleRate = 48000;
+
+    function encodeWav16k(samples, srcRate) {
+      let resampled = samples;
+      if (srcRate !== 16000) {
+        const ratio = srcRate / 16000;
+        const newLen = Math.round(samples.length / ratio);
+        resampled = new Float32Array(newLen);
+        for (let i = 0; i < newLen; i++) {
+          resampled[i] = samples[Math.min(Math.floor(i * ratio), samples.length - 1)];
+        }
+      }
+      const buffer = new ArrayBuffer(44 + resampled.length * 2);
+      const view = new DataView(buffer);
+      const w = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+      w(0, "RIFF"); view.setUint32(4, 36 + resampled.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
+      view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+      view.setUint32(24, 16000, true); view.setUint32(28, 32000, true); view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true); w(36, "data"); view.setUint32(40, resampled.length * 2, true);
+      let offset = 44;
+      for (let i = 0; i < resampled.length; i++, offset += 2) {
+        const s = Math.max(-1, Math.min(1, resampled[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      }
+      return new Blob([view], { type: "audio/wav" });
+    }
+
+    recordBtn.addEventListener("click", async () => {
+      hideError();
+      if (!isRecording) {
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          inputSampleRate = audioCtx.sampleRate;
+          const src = audioCtx.createMediaStreamSource(mediaStream);
+          scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
+          audioChunks = [];
+          scriptNode.onaudioprocess = (e) => audioChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+          src.connect(scriptNode);
+          scriptNode.connect(audioCtx.destination);
+          isRecording = true;
+          recordBtn.classList.add("recording-pulse", "bg-red-600");
+          recordBtn.classList.remove("bg-pink-600");
+          micStatus.textContent = "Đang thu âm... Bấm lại vào Micro để gửi.";
+        } catch (err) {
+          showError("Lỗi Microphone: " + err.message);
+        }
+      } else {
+        isRecording = false;
+        recordBtn.classList.remove("recording-pulse", "bg-red-600");
+        recordBtn.classList.add("bg-pink-600");
+        micStatus.textContent = "Đang chạy VAD + Gipformer STT + Financial ITN + Agent...";
+        if (scriptNode) scriptNode.disconnect();
+        if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+        if (audioCtx) await audioCtx.close();
+
+        const len = audioChunks.reduce((a, c) => a + c.length, 0);
+        const merged = new Float32Array(len);
+        let off = 0;
+        for (const c of audioChunks) { merged.set(c, off); off += c.length; }
+        const wav = encodeWav16k(merged, inputSampleRate);
+
+        const fd = new FormData();
+        fd.append("session_id", currentSessionId);
+        fd.append("file", wav, "voice.wav");
+        try {
+          const res = await fetch("/api/voice-chat", { method: "POST", body: fd });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "Voice error");
+          appendMessage("user", data.normalized_transcript, `Raw ASR: "${data.raw_transcript}" (${data.stt_latency_ms}ms)`);
+          appendMessage("assistant", data.assistant_reply);
+          renderWorkspaceState(data);
+          micStatus.textContent = "Hoàn tất! Bấm Mic để tiếp tục hội thoại.";
+        } catch (err) {
+          showError(err.message);
+          micStatus.textContent = "Thử lại: Bấm Mic để nói rõ hơn.";
+        }
+      }
+    });
+
+    (async () => {
+      await checkHealth();
+      await initSession("scenario_a");
+    })();
+  </script>
+</body>
+</html>
