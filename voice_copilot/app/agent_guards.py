@@ -186,7 +186,7 @@ class PrerequisiteContactGuard:
             return None
 
         rid = str(call.arguments.get("recipient_id", "")).strip()
-        valid_ids = set(state.seen_contacts.keys()) | state.seen_recipient_account_ids
+        valid_ids = set(state.seen_contacts.keys()) | set(state.seen_recipient_account_ids)
         if not valid_ids:
             return (
                 "PREREQUISITE ERROR: You must call 'find_contacts' first to resolve the recipient "

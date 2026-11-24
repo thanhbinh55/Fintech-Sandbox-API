@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 import time
@@ -20,15 +21,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_INDEX = BASE_DIR / "static" / "index.html"
 
 stt_service = GipformerSTTService()
-sandbox_bridge = SandboxBridge()
+sandbox_bridge = SandboxBridge(db_path=BASE_DIR / "sessions_state.db")
 copilot_agent: FintechCopilotAgent | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global copilot_agent
+    await sandbox_bridge.startup()
     try:
-        stt_service.load()
+        await asyncio.to_thread(stt_service.load)
     except Exception as exc:
         print(f"⚠️ [Voice Copilot] STT load warning: {exc}")
     try:
@@ -36,13 +38,16 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         print(f"⚠️ [Voice Copilot] Agent init warning (GEMINI_API_KEY may be missing): {exc}")
         copilot_agent = None
-    yield
+    try:
+        yield
+    finally:
+        await sandbox_bridge.shutdown()
 
 
 app = FastAPI(
     title="MoMo AI Financial Copilot Workspace",
-    description="Gipformer 1.5 ASR + Vietnamese Financial ITN + Guardrailed Multi-Turn Agent + Fintech Sandbox API",
-    version="0.2.0",
+    description="Gipformer 1.5 ASR + Vietnamese Financial ITN + Guardrailed Async Multi-Turn Agent + Fintech Sandbox API",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -88,9 +93,13 @@ async def health():
     sandbox_ok = False
     try:
         health_url = SANDBOX_BASE_URL.rsplit("/v1", 1)[0] + "/health"
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            r = await client.get(health_url)
+        client, should_close = await sandbox_bridge._get_client()
+        try:
+            r = await client.get(health_url, timeout=2.0)
             sandbox_ok = r.status_code == 200
+        finally:
+            if should_close:
+                await client.aclose()
     except Exception:
         sandbox_ok = False
 
@@ -111,7 +120,9 @@ async def transcribe_only(file: UploadFile = File(...)):
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file")
     try:
-        raw_text, norm_text, stt_ms, stats = stt_service.transcribe_audio_bytes(audio_bytes)
+        raw_text, norm_text, stt_ms, stats = await asyncio.to_thread(
+            stt_service.transcribe_audio_bytes, audio_bytes
+        )
         return {
             "raw_transcript": raw_text,
             "transcript": norm_text,
@@ -163,19 +174,23 @@ async def get_accounts(session_id: str):
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
+def _get_or_init_agent() -> FintechCopilotAgent:
+    if copilot_agent is not None:
+        return copilot_agent
+    try:
+        return FintechCopilotAgent(bridge=sandbox_bridge)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm GEMINI_API_KEY vào file .env rồi khởi động lại server.",
+        ) from exc
+
+
 @app.post("/api/chat")
 async def chat_turn(req: ChatRequest):
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Empty text")
-    agent = copilot_agent
-    if not agent:
-        try:
-            agent = FintechCopilotAgent(bridge=sandbox_bridge)
-        except Exception as exc:
-            raise HTTPException(
-                status_code=400,
-                detail="Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm GEMINI_API_KEY vào file .env rồi khởi động lại server.",
-            ) from exc
+    agent = _get_or_init_agent()
     t0 = time.perf_counter()
     try:
         normalized_text = normalize_vietnamese_financial_itn(req.text.strip())
@@ -204,18 +219,12 @@ async def voice_chat_turn(
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file")
 
-    agent = copilot_agent
-    if not agent:
-        try:
-            agent = FintechCopilotAgent(bridge=sandbox_bridge)
-        except Exception as exc:
-            raise HTTPException(
-                status_code=400,
-                detail="Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm GEMINI_API_KEY vào file .env rồi khởi động lại server.",
-            ) from exc
+    agent = _get_or_init_agent()
     t0 = time.perf_counter()
     try:
-        raw_text, norm_text, stt_ms, stats = stt_service.transcribe_audio_bytes(audio_bytes)
+        raw_text, norm_text, stt_ms, stats = await asyncio.to_thread(
+            stt_service.transcribe_audio_bytes, audio_bytes
+        )
         if not norm_text:
             raise HTTPException(
                 status_code=422,

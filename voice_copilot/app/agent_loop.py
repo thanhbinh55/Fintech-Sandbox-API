@@ -1,6 +1,7 @@
-"""Multi-turn Tool-Calling Agent Loop with Guardrails (adapted from Zalo AI Challenge ToolLoop)."""
+"""Multi-turn Tool-Calling Agent Loop with Async Gemini, Low-Latency Thinking Budget, Retry/Fallback & Guardrails."""
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any
@@ -20,14 +21,15 @@ NGUYÊN TẮC CỐT LÕI (BẮT BUỘC TUÂN THỦ):
 2. **Xử lý trùng tên người nhận (Scenario A — Ambiguity Handling):**
    - Trước khi tạo bản nháp chuyển tiền, LUÔN gọi `find_contacts(query)` trước.
    - Nếu `is_ambiguous: true` (ví dụ có cả "Nguyễn Minh" và "Trần Minh") và người dùng chưa nói rõ tên đầy đủ / ngân hàng / SĐT: **TUYỆT ĐỐI KHÔNG** gọi `create_payment_draft`. Hãy lịch sự liệt kê rõ từng ứng viên (kèm ngân hàng và SĐT) để hỏi lại người dùng chọn ai.
-3. **Luôn lấy báo giá Smart Payment Routing (Scenario A & B):**
-   - Ngay sau khi `create_payment_draft` thành công, LUÔN gọi tiếp `get_payment_quotes(payment_intent_id)` để lấy bảng xếp hạng các nguồn tiền tối ưu (Ví MoMo, Vietcombank, Techcombank Visa...) kèm phí, giảm giá, hoàn tiền và giải thích rõ vì sao nguồn #1 được khuyến nghị.
-   - Nếu người dùng chỉ hỏi *"Thanh toán X đồng bằng nguồn nào có lợi nhất?"* mà chưa nêu tên người nhận, hãy gọi `get_payment_sources()` để kiểm tra nguồn tiền hiện có và gợi ý người dùng chọn người nhận (hoặc nếu họ chỉ định/nhắc tới giao dịch cụ thể thì tạo draft + gọi `get_payment_quotes` để công cụ xếp hạng tính toán chính xác).
+3. **Tạo nháp & Smart Payment Routing (Scenario A & B):**
+   - Lưu ý tối ưu tốc độ: Công cụ `create_payment_draft` **ĐÃ TỰ ĐỘNG TÍNH VÀ TRẢ VỀ LUÔN `quotes` (bảng xếp hạng nguồn tiền)** trong cùng kết quả. Vì vậy khi `create_payment_draft` đã trả về `quotes`, **KHÔNG cần gọi lại `get_payment_quotes` nữa** — hãy dùng ngay dữ liệu `quotes` đó để giải thích ngắn gọn vì sao nguồn #1 được khuyến nghị (chi phí hiệu quả, giảm giá, hoàn tiền, phí).
+   - Chỉ gọi `get_payment_quotes` riêng nếu cần tính lại báo giá cho một `payment_intent_id` đã có từ trước.
+   - Nếu người dùng chỉ hỏi *"Thanh toán X đồng bằng nguồn nào có lợi nhất?"* mà chưa nêu tên người nhận, hãy gọi `get_payment_sources()` để kiểm tra nguồn tiền hiện có và gợi ý người dùng chọn người nhận.
 4. **Chia hóa đơn nhóm chính xác (Scenario C — Split Bill):**
    - Khi người dùng yêu cầu chia hóa đơn ăn uống/nhóm, trích xuất đầy đủ `title`, `payer_name` (mặc định `"An"` nếu người dùng xưng "tôi/mình/tao" trong phiên demo), `participants`, `items` (với `unit_price_vnd`, `quantity`, `assigned_participant_names` rỗng nếu chia đều), `tax_vnd`, `service_fee_vnd`, `discount_vnd`, rồi gọi `create_split_bill`.
    - Số tiền luôn là số nguyên VND dương.
 5. **Human-in-the-Loop (An toàn tuyệt đối):**
-   - Bạn KHÔNG có quyền duyệt hay chuyển tiền thật. Sau khi tạo xong bản nháp và báo giá, hãy tóm tắt rõ ràng thông tin đơn và nhắc người dùng kiểm tra thẻ duyệt bên phải rồi bấm nút **"Xác nhận & Thanh toán"**.
+   - Bạn KHÔNG có quyền duyệt hay chuyển tiền thật. Sau khi tạo xong bản nháp và báo giá, hãy tóm tắt ngắn gọn thông tin đơn và nhắc người dùng bấm **"Xác nhận & Thanh toán ngay"** ở thẻ duyệt.
 6. **Ngắn gọn, thân thiện, tiếng Việt tự nhiên.**
 """
 
@@ -55,7 +57,7 @@ SANDBOX_TOOLS = types.Tool(
         ),
         types.FunctionDeclaration(
             name="create_payment_draft",
-            description="Tạo bản nháp giao dịch chuyển tiền (trạng thái DRAFT). Chỉ tạo nháp, KHÔNG thực hiện thanh toán.",
+            description="Tạo bản nháp giao dịch chuyển tiền (DRAFT) VÀ tự động trả về bảng xếp hạng nguồn tiền tối ưu (quotes). Chỉ tạo nháp, KHÔNG thực hiện thanh toán.",
             parameters=types.Schema(
                 type=types.Type.OBJECT,
                 properties={
@@ -77,13 +79,13 @@ SANDBOX_TOOLS = types.Tool(
         ),
         types.FunctionDeclaration(
             name="get_payment_quotes",
-            description="Tính toán và xếp hạng các phương thức thanh toán tối ưu cho một bản nháp (Smart Payment Routing: so sánh phí, giảm giá, cashback).",
+            description="Tính lại hoặc lấy bảng xếp hạng nguồn tiền cho một payment_intent_id đã tồn tại (không cần gọi nếu create_payment_draft vừa trả về quotes).",
             parameters=types.Schema(
                 type=types.Type.OBJECT,
                 properties={
                     "payment_intent_id": types.Schema(
                         type=types.Type.STRING,
-                        description="ID của bản nháp giao dịch từ create_payment_draft",
+                        description="ID của bản nháp giao dịch",
                     )
                 },
                 required=["payment_intent_id"],
@@ -151,13 +153,14 @@ SANDBOX_TOOLS = types.Tool(
 
 
 class FintechCopilotAgent:
-    """Multi-turn tool-calling orchestrator combining Gemini + Guardrails + Fintech Sandbox."""
+    """Async multi-turn tool-calling orchestrator combining Gemini + Guardrails + Fintech Sandbox."""
 
     def __init__(
         self,
         bridge: SandboxBridge,
         api_key: str = GEMINI_API_KEY,
         model_name: str = LLM_MODEL,
+        fallback_model: str = "gemini-2.5-flash-lite",
         max_steps: int = 6,
         max_blocked: int = 3,
     ):
@@ -166,10 +169,84 @@ class FintechCopilotAgent:
         self.bridge = bridge
         self.provider_name = "gemini"
         self.model_name = model_name
+        self.fallback_model = fallback_model
         self.client = genai.Client(api_key=api_key)
         self.guards = default_fintech_guards()
         self.max_steps = max_steps
         self.max_blocked = max_blocked
+
+    def _build_system_instruction(self, state: SessionState) -> str:
+        ctx: dict[str, Any] = {}
+        if state.seen_contacts:
+            ctx["known_contacts"] = [
+                {
+                    "recipient_account_id": c.get("recipient_account_id"),
+                    "display_name": c.get("display_name"),
+                    "bank_name": c.get("bank_name") or "Ví MoMo",
+                    "phone_number": c.get("phone_number"),
+                }
+                for c in state.seen_contacts.values()
+            ]
+        if state.active_draft:
+            ctx["active_draft"] = {
+                "id": state.active_draft.get("id"),
+                "amount_vnd": state.active_draft.get("amount_vnd"),
+                "status": state.active_draft.get("status"),
+            }
+        if not ctx:
+            return COPILOT_SYSTEM_PROMPT
+        return (
+            COPILOT_SYSTEM_PROMPT
+            + "\n\n[SESSION_CONTEXT ĐÃ TRA CỨU TRONG PHIÊN NÀY - DÙNG ĐỂ GỌI TOOL KHI NGƯỜI DÙNG CHỌN]:\n"
+            + json.dumps(ctx, ensure_ascii=False)
+        )
+
+    def _build_config(
+        self, state: SessionState, use_thinking_zero: bool = True
+    ) -> types.GenerateContentConfig:
+        kwargs: dict[str, Any] = {
+            "system_instruction": self._build_system_instruction(state),
+            "tools": [SANDBOX_TOOLS],
+            "temperature": 0.1,
+        }
+        if use_thinking_zero and "2.5" in self.model_name:
+            kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        return types.GenerateContentConfig(**kwargs)
+
+    async def _generate_with_resilience(
+        self, state: SessionState, contents: list[types.Content]
+    ) -> tuple[Any, str]:
+        """Async Gemini call with 10s per-attempt timeout, zero-thinking latency, and fast fallback."""
+        config = self._build_config(state, use_thinking_zero=True)
+        models_to_try = [self.model_name]
+        if self.fallback_model and self.fallback_model != self.model_name:
+            models_to_try.append(self.fallback_model)
+        models_to_try.append(self.model_name)
+
+        last_exc: Exception | None = None
+        for idx, active_model in enumerate(models_to_try):
+            if idx == 2:
+                await asyncio.sleep(0.3)
+            try:
+                resp = await asyncio.wait_for(
+                    self.client.aio.models.generate_content(
+                        model=active_model,
+                        contents=contents,
+                        config=config,
+                    ),
+                    timeout=10.0,
+                )
+                cand = resp.candidates[0] if resp.candidates else None
+                parts = (cand.content.parts or []) if (cand and cand.content) else []
+                if parts:
+                    return resp, active_model
+                last_exc = RuntimeError(f"Empty parts returned by {active_model}")
+            except Exception as exc:
+                last_exc = exc
+                if "thinking" in str(exc).lower():
+                    config = self._build_config(state, use_thinking_zero=False)
+        assert last_exc is not None
+        raise last_exc
 
     async def _execute_tool(
         self, session_id: str, name: str, args: dict[str, Any]
@@ -202,7 +279,6 @@ class FintechCopilotAgent:
         state: SessionState = self.bridge.get_session(session_id)
         t0 = time.perf_counter()
 
-        # Build conversation contents from session history + current user message
         contents: list[types.Content] = []
         for msg in state.chat_history[-10:]:
             role = "user" if msg["role"] == "user" else "model"
@@ -216,27 +292,21 @@ class FintechCopilotAgent:
         executed_in_turn: list[dict[str, Any]] = []
         tool_trace: list[dict[str, Any]] = []
         blocked_count = 0
+        llm_rounds = 0
+        used_model = self.model_name
         assistant_reply = ""
 
-        config = types.GenerateContentConfig(
-            system_instruction=COPILOT_SYSTEM_PROMPT,
-            tools=[SANDBOX_TOOLS],
-            temperature=0.1,
-        )
-
         for _ in range(self.max_steps):
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=contents,
-                config=config,
-            )
+            llm_rounds += 1
+            response, used_model = await self._generate_with_resilience(state, contents)
 
             candidate = response.candidates[0] if response.candidates else None
-            if not candidate or not candidate.content:
+            parts = (candidate.content.parts or []) if (candidate and candidate.content) else []
+            if not parts:
                 break
 
             contents.append(candidate.content)
-            fn_calls = [p.function_call for p in candidate.content.parts if p.function_call]
+            fn_calls = [p.function_call for p in parts if p.function_call]
 
             if not fn_calls:
                 assistant_reply = (response.text or "").strip()
@@ -259,14 +329,15 @@ class FintechCopilotAgent:
 
                 if guard_rejection:
                     blocked_count += 1
-                    trace_item = {
-                        "tool": name,
-                        "args": args,
-                        "status": "BLOCKED",
-                        "guard": rejected_by,
-                        "message": guard_rejection,
-                    }
-                    tool_trace.append(trace_item)
+                    tool_trace.append(
+                        {
+                            "tool": name,
+                            "args": args,
+                            "status": "BLOCKED",
+                            "guard": rejected_by,
+                            "message": guard_rejection,
+                        }
+                    )
                     result_payload = {"ok": False, "error": guard_rejection}
                 else:
                     t_tool = time.perf_counter()
@@ -307,11 +378,11 @@ class FintechCopilotAgent:
                 break
 
         if not assistant_reply:
-            assistant_reply = "Đã xử lý xong thông tin giao dịch. Vui lòng kiểm tra chi tiết ở khung bên phải."
+            assistant_reply = "Đã xử lý xong thông tin giao dịch. Vui lòng kiểm tra chi tiết ở thẻ duyệt."
 
-        # Persist concise conversation turns for multi-turn disambiguation
         state.chat_history.append({"role": "user", "text": user_text})
         state.chat_history.append({"role": "assistant", "text": assistant_reply})
+        self.bridge.save_session(state)
 
         llm_ms = round((time.perf_counter() - t0) * 1000, 2)
         return {
@@ -322,6 +393,7 @@ class FintechCopilotAgent:
             "active_split_bill": state.active_split_bill,
             "ambiguous_contacts": state.ambiguous_contacts,
             "llm_latency_ms": llm_ms,
+            "llm_rounds": llm_rounds,
             "llm_provider": self.provider_name,
-            "llm_model": self.model_name,
+            "llm_model": used_model,
         }
