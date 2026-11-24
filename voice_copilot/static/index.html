@@ -8,80 +8,121 @@
   <style>
     @keyframes pulse-ring {
       0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(216, 45, 139, 0.7); }
-      70% { transform: scale(1); box-shadow: 0 0 0 16px rgba(216, 45, 139, 0); }
+      70% { transform: scale(1); box-shadow: 0 0 0 14px rgba(216, 45, 139, 0); }
       100% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(216, 45, 139, 0); }
     }
-    .recording-pulse { animation: pulse-ring 1.4s infinite; }
+    .recording-pulse { animation: pulse-ring 1.3s infinite; }
+    @keyframes balance-flash {
+      0% { background-color: rgb(209 250 229); border-color: rgb(16 185 129); }
+      100% { background-color: rgb(255 255 255); border-color: rgb(226 232 240); }
+    }
+    .balance-updated { animation: balance-flash 1.6s ease-out; }
+    .dot-bounce span {
+      display: inline-block; width: 6px; height: 6px; border-radius: 9999px;
+      background: #db2777; animation: bounce 1.2s infinite ease-in-out both;
+    }
+    .dot-bounce span:nth-child(2) { animation-delay: 0.16s; }
+    .dot-bounce span:nth-child(3) { animation-delay: 0.32s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.5); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen font-sans">
-  <div class="max-w-7xl mx-auto px-4 py-5 space-y-5">
+<body class="bg-slate-100 text-slate-800 min-h-screen font-sans antialiased">
+  <div class="max-w-7xl mx-auto px-3 sm:px-5 py-4 sm:py-5 space-y-4">
 
-    <!-- Top Workspace Header & Controls -->
-    <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+    <!-- Header -->
+    <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
       <div class="flex items-center gap-3">
-        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-pink-600 to-fuchsia-700 text-white font-bold text-xl flex items-center justify-center shadow">M</div>
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-pink-600 to-fuchsia-700 text-white font-bold text-xl flex items-center justify-center shadow-sm shrink-0">M</div>
         <div>
-          <div class="flex items-center gap-2">
-            <h1 class="text-xl font-bold text-slate-900">MoMo AI Financial Copilot Workspace</h1>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-bold text-slate-900">MoMo AI Financial Copilot</h1>
             <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-pink-100 text-pink-700">Human-in-the-Loop</span>
           </div>
           <p class="text-xs text-slate-500 mt-0.5">
-            Voice: <span class="font-semibold text-slate-700">Gipformer 1.5 (VAD + Financial ITN)</span> •
-            Agent: <span id="llmBadge" class="font-semibold text-indigo-700">Gemini + Guardrails</span> •
-            Core: <span id="sandboxBadge" class="font-semibold text-emerald-700">Fintech Sandbox Ledger</span>
+            Voice: <span class="font-semibold text-slate-700">Gipformer 1.5 + Financial ITN</span> •
+            Agent: <span id="llmBadge" class="font-semibold text-indigo-700">Gemini Async</span> •
+            Core: <span class="font-semibold text-emerald-700">Double-Entry Sandbox</span>
           </p>
         </div>
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        <select id="scenarioSelect" class="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold bg-slate-50 focus:ring-2 focus:ring-pink-500">
+        <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium cursor-pointer select-none" title="Đọc phản hồi bằng giọng nói tiếng Việt">
+          <input id="ttsToggle" type="checkbox" class="accent-pink-600 rounded" />
+          <span>Đọc TTS</span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium cursor-pointer select-none" title="Tự động dừng thu âm sau 1.6s im lặng">
+          <input id="vadToggle" type="checkbox" checked class="accent-pink-600 rounded" />
+          <span>Auto-Stop Mic</span>
+        </label>
+        <select id="scenarioSelect" class="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold bg-white focus:ring-2 focus:ring-pink-500">
           <option value="scenario_a">Scenario A: Chuyển tiền & Trùng tên</option>
           <option value="scenario_b">Scenario B: Smart Payment Routing</option>
           <option value="scenario_c">Scenario C: Chia hóa đơn nhóm</option>
         </select>
         <button id="resetBtn" class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition">
-          Reset Demo Session
+          Reset Demo
         </button>
         <div id="healthPill" class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-200 text-slate-700">Đang kết nối...</div>
       </div>
     </header>
 
-    <!-- Live Double-Entry Account Balances Strip -->
+    <!-- 3-Wallet Clean Balances Strip -->
     <section id="balancesStrip" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></section>
 
     <!-- Main 2-Column Workspace -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
 
-      <!-- Left Column (5 cols): Voice Mic + Multi-Turn Chat + Sample Prompts -->
-      <section class="lg:col-span-5 flex flex-col gap-4">
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-[560px]">
+      <!-- Left: Voice & Chat Copilot -->
+      <section class="lg:col-span-5 flex flex-col gap-3">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col h-[58vh] min-h-[420px] lg:h-[580px]">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Hội thoại Voice / Text (Agent Token)</h2>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Hội thoại Voice / Text (Agent Scope)</h2>
             <span id="sessionIdPill" class="text-[11px] font-mono text-slate-400">session: ...</span>
           </div>
 
           <!-- Chat Feed -->
-          <div id="chatFeed" class="flex-1 overflow-y-auto py-3 space-y-3 pr-1">
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600">
-              Xin chào! Tôi là <b>MoMo AI Financial Copilot</b>. Hãy bấm Micro để nói hoặc chọn kịch bản mẫu bên dưới:
+          <div id="chatFeed" class="flex-1 overflow-y-auto py-3 space-y-3 pr-1 scroll-smooth">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 leading-relaxed">
+              Xin chào! Tôi là <b>MoMo AI Financial Copilot</b>. Bạn có thể bấm Micro để nói tiếng Việt tự nhiên (kể cả tiếng lóng & tên ngân hàng đọc phiên âm):
               <ul class="list-disc ml-4 mt-1.5 space-y-0.5">
                 <li><b>Chuyển tiền & làm rõ:</b> <i>"Chuyển cho Minh một trăm năm mươi ca tiền ăn tối"</i></li>
                 <li><b>Smart Routing:</b> <i>"Chuyển cho Lan hai lít, chọn nguồn tiền có lợi nhất"</i></li>
-                <li><b>Chia bill:</b> <i>"Chia hóa đơn cơm trưa 180k, An trả trước: 3 cơm 50k chia đều An Bình Cường, 1 nước cam 30k cho An"</i></li>
+                <li><b>Chia bill:</b> <i>"Chia hóa đơn cơm trưa 180k..."</i></li>
               </ul>
             </div>
           </div>
 
+          <!-- Mobile Jump Banner (visible when new action card appears below fold) -->
+          <button
+            id="mobileJumpBanner"
+            class="hidden lg:hidden mb-2 w-full py-2 px-3 rounded-xl bg-pink-50 border border-pink-300 text-pink-800 text-xs font-bold flex items-center justify-between shadow-sm"
+          >
+            <span id="mobileJumpText">Đơn thanh toán đã sẵn sàng</span>
+            <span>Xem & Xác nhận ↓</span>
+          </button>
+
           <!-- Disambiguation Quick Chips -->
           <div id="disambigBox" class="hidden py-2 flex flex-wrap gap-1.5 border-t border-slate-100"></div>
+
+          <!-- Live Audio Waveform Bar (visible while recording) -->
+          <div id="waveformBar" class="hidden py-2 px-3 mb-2 rounded-xl bg-pink-50 border border-pink-200 flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse shrink-0"></span>
+            <canvas id="waveformCanvas" width="220" height="32" class="flex-1 h-8"></canvas>
+            <span id="recordTimer" class="text-xs font-mono font-semibold text-pink-700 shrink-0">00:00</span>
+            <button id="cancelRecordBtn" type="button" class="px-2 py-1 rounded-lg bg-white border border-pink-200 text-slate-600 hover:text-red-600 text-xs font-bold" title="Hủy thu âm">✕</button>
+          </div>
 
           <!-- Mic + Input Bar -->
           <div class="pt-3 border-t border-slate-100 flex items-center gap-2">
             <button
               id="recordBtn"
-              title="Giữ/Bấm để nói bằng tiếng Việt"
-              class="shrink-0 w-12 h-12 rounded-full bg-pink-600 hover:bg-pink-700 text-white flex items-center justify-center shadow transition focus:outline-none"
+              type="button"
+              title="Bấm để nói bằng tiếng Việt"
+              class="shrink-0 w-11 h-11 rounded-full bg-pink-600 hover:bg-pink-700 text-white flex items-center justify-center shadow transition focus:outline-none disabled:opacity-50"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
@@ -94,63 +135,60 @@
               id="chatInput"
               type="text"
               placeholder="Hoặc gõ lệnh tiếng Việt tại đây..."
-              class="flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-pink-500 outline-none"
+              class="flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-pink-500 outline-none disabled:bg-slate-50"
             />
-            <button id="sendBtn" class="shrink-0 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold transition">
+            <button id="sendBtn" type="button" class="shrink-0 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold transition disabled:opacity-50">
               Gửi
             </button>
           </div>
-          <p id="micStatus" class="text-[11px] text-slate-400 mt-1.5">Bấm Mic để bắt đầu nói, bấm lại để gửi vào Gipformer + ITN.</p>
+          <p id="micStatus" class="text-[11px] text-slate-400 mt-1.5">Bấm Mic để nói — tự động lọc khoảng lặng & chuẩn hóa tên ngân hàng VN.</p>
         </div>
 
         <!-- Sample Scenarios -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-2">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Kịch bản thử nhanh (Bấm để gửi)</h3>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Kịch bản thử nhanh</h3>
           <div class="grid grid-cols-1 gap-1.5 text-xs">
-            <button class="sample-btn text-left p-2 rounded-lg bg-slate-50 hover:bg-pink-50 border border-slate-200 hover:border-pink-300 transition">
+            <button type="button" class="sample-btn text-left p-2.5 rounded-xl bg-slate-50 hover:bg-pink-50 border border-slate-200 hover:border-pink-300 transition disabled:opacity-50">
               Chuyển cho Minh một trăm năm mươi ca tiền ăn tối
             </button>
-            <button class="sample-btn text-left p-2 rounded-lg bg-slate-50 hover:bg-pink-50 border border-slate-200 hover:border-pink-300 transition">
+            <button type="button" class="sample-btn text-left p-2.5 rounded-xl bg-slate-50 hover:bg-pink-50 border border-slate-200 hover:border-pink-300 transition disabled:opacity-50">
               Chuyển cho Lan hai lít, chọn nguồn tiền có lợi nhất
             </button>
-            <button class="sample-btn text-left p-2 rounded-lg bg-slate-50 hover:bg-pink-50 border border-slate-200 hover:border-pink-300 transition">
+            <button type="button" class="sample-btn text-left p-2.5 rounded-xl bg-slate-50 hover:bg-pink-50 border border-slate-200 hover:border-pink-300 transition disabled:opacity-50">
               Tạo chia hóa đơn Bữa trưa nhóm, An đã trả trước: 3 phần cơm 50k chia đều cho An Bình Cường, và 1 nước cam 30k riêng cho An
             </button>
           </div>
         </div>
       </section>
 
-      <!-- Right Column (7 cols): Human-in-the-Loop Approval, Routing, Split Bill, Trace -->
-      <section class="lg:col-span-7 space-y-4">
+      <!-- Right: Human-in-the-Loop Approval, Routing, Split Bill, Telemetry -->
+      <section id="actionColumn" class="lg:col-span-7 space-y-4">
         <div id="errorBanner" class="hidden rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700"></div>
 
         <!-- Payment Draft & Smart Routing Card -->
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+        <div id="approvalCard" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Thẻ Duyệt Giao Dịch & Smart Payment Routing</h2>
             <span id="draftStatusBadge" class="hidden px-2.5 py-0.5 rounded-full text-[11px] font-bold"></span>
           </div>
 
           <div id="noDraftState" class="py-8 text-center text-xs text-slate-400">
-            Chưa có bản nháp chuyển khoản nào. AI sẽ tạo nháp (`DRAFT`) & lấy bảng xếp hạng nguồn tiền (`QUOTED`) tại đây — tiền chỉ đi khi bạn bấm xác nhận.
+            Chưa có bản nháp chuyển khoản nào. AI sẽ tạo nháp (<code>DRAFT</code>) & xếp hạng nguồn tiền (<code>QUOTED</code>) tại đây — tiền chỉ đi khi bạn bấm xác nhận.
           </div>
 
           <div id="draftPanel" class="hidden space-y-4">
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs">
               <div>
-                <p class="text-slate-400">Người nhận</p>
+                <p class="text-slate-400">Người nhận & Ngân hàng</p>
                 <p id="dRecipient" class="font-bold text-slate-900 mt-0.5">—</p>
+                <p id="dRecipientSub" class="text-[11px] text-slate-500 mt-0.5">—</p>
               </div>
               <div>
-                <p class="text-slate-400">Mã tài khoản đích</p>
-                <p id="dAccountId" class="font-mono text-slate-700 mt-0.5 truncate">—</p>
+                <p class="text-slate-400">Số tiền chuyển</p>
+                <p id="dAmount" class="font-extrabold text-pink-600 text-base mt-0.5">—</p>
               </div>
               <div>
-                <p class="text-slate-400">Số tiền gốc</p>
-                <p id="dAmount" class="font-bold text-pink-600 text-sm mt-0.5">—</p>
-              </div>
-              <div>
-                <p class="text-slate-400">Nội dung</p>
+                <p class="text-slate-400">Lời nhắn</p>
                 <p id="dNote" class="font-medium text-slate-800 mt-0.5">—</p>
               </div>
             </div>
@@ -161,10 +199,10 @@
               <div id="quotesList" class="space-y-2"></div>
             </div>
 
-            <!-- Human Approval Button -->
-            <div class="flex items-center justify-between pt-2 border-t border-slate-100">
-              <p class="text-[11px] text-slate-500">Quyền thực thi tách biệt: Chỉ <code>user_token</code> mới gọi được <code>approve + execute</code>.</p>
-              <button id="approveExecuteBtn" class="px-5 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-sm font-bold shadow transition disabled:opacity-50">
+            <!-- Human Approval Bar -->
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 border-t border-slate-100">
+              <p class="text-[11px] text-slate-500">Bảo mật phân quyền: Chỉ <code>user_token</code> mới thực thi được giao dịch.</p>
+              <button id="approveExecuteBtn" type="button" class="px-5 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-sm font-bold shadow transition disabled:opacity-50">
                 Xác nhận & Thanh toán ngay
               </button>
             </div>
@@ -186,11 +224,11 @@
           <div id="splitCollections" class="space-y-2 pt-2 border-t border-slate-100"></div>
         </div>
 
-        <!-- Agent & Guardrails Trace -->
-        <details class="bg-slate-900 text-slate-100 rounded-2xl p-4 text-xs" open>
+        <!-- Collapsed Telemetry by default -->
+        <details class="bg-slate-900 text-slate-100 rounded-2xl p-4 text-xs">
           <summary class="cursor-pointer font-semibold text-slate-300 select-none flex items-center justify-between">
             <span>Telemetry: Gipformer ASR → Financial ITN → Guardrails & Tool Trace</span>
-            <span id="latencyPill" class="font-mono text-[11px] text-emerald-400"></span>
+            <span id="latencyPill" class="font-mono text-[11px] text-emerald-400">Chưa chạy</span>
           </summary>
           <div id="itnBox" class="hidden mt-3 p-2.5 rounded-lg bg-slate-800 text-[11px] font-mono space-y-1"></div>
           <pre id="traceBox" class="mt-3 overflow-x-auto font-mono text-[11px] leading-relaxed text-emerald-300 max-h-60">Chưa có lượt chạy nào.</pre>
@@ -203,18 +241,105 @@
     let currentSessionId = null;
     let selectedQuoteId = null;
     let activeIntentId = null;
+    let isBusy = false;
+    let prevBalances = {};
 
     const chatFeed = document.getElementById("chatFeed");
     const chatInput = document.getElementById("chatInput");
     const sendBtn = document.getElementById("sendBtn");
     const recordBtn = document.getElementById("recordBtn");
+    const cancelRecordBtn = document.getElementById("cancelRecordBtn");
     const micStatus = document.getElementById("micStatus");
+    const waveformBar = document.getElementById("waveformBar");
+    const waveformCanvas = document.getElementById("waveformCanvas");
+    const recordTimer = document.getElementById("recordTimer");
     const scenarioSelect = document.getElementById("scenarioSelect");
     const resetBtn = document.getElementById("resetBtn");
+    const ttsToggle = document.getElementById("ttsToggle");
+    const vadToggle = document.getElementById("vadToggle");
+    const mobileJumpBanner = document.getElementById("mobileJumpBanner");
 
     function fmtVND(v) {
       if (v == null) return "—";
       return new Intl.NumberFormat("vi-VN").format(v) + " đ";
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function renderSafeMarkdown(rawText) {
+      const lines = escapeHtml(rawText || "").split(/\r?\n/);
+      const out = [];
+      let inList = false;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const bulletMatch = trimmed.match(/^[-*•]\s+(.*)$/);
+        const formatted = (s) => s
+          .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+          .replace(/\*(.+?)\*/g, "<i>$1</i>")
+          .replace(/`([^`]+)`/g, "<code class='px-1 py-0.5 rounded bg-slate-200/70 font-mono text-[11px]'>$1</code>");
+
+        if (bulletMatch) {
+          if (!inList) {
+            out.push("<ul class='list-disc ml-4 my-1 space-y-0.5'>");
+            inList = true;
+          }
+          out.push(`<li>${formatted(bulletMatch[1])}</li>`);
+        } else {
+          if (inList) {
+            out.push("</ul>");
+            inList = false;
+          }
+          if (trimmed) {
+            out.push(`<p class="mb-1 last:mb-0">${formatted(trimmed)}</p>`);
+          }
+        }
+      }
+      if (inList) out.push("</ul>");
+      return out.join("");
+    }
+
+    function speakVietnamese(text) {
+      if (!ttsToggle.checked || !("speechSynthesis" in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const plain = text.replace(/[*_`#]/g, "").replace(/\s+/g, " ").trim();
+        const utter = new SpeechSynthesisUtterance(plain.slice(0, 260));
+        utter.lang = "vi-VN";
+        utter.rate = 1.05;
+        window.speechSynthesis.speak(utter);
+      } catch {}
+    }
+
+    function setBusy(busy, statusText = null) {
+      isBusy = busy;
+      chatInput.disabled = busy;
+      sendBtn.disabled = busy;
+      recordBtn.disabled = busy && !isRecording;
+      resetBtn.disabled = busy;
+      scenarioSelect.disabled = busy;
+      document.querySelectorAll(".sample-btn, .disambig-chip").forEach((b) => { b.disabled = busy; });
+
+      const existing = document.getElementById("typingBubble");
+      if (busy) {
+        if (!existing) {
+          const div = document.createElement("div");
+          div.id = "typingBubble";
+          div.className = "mr-8 bg-slate-100 text-slate-600 rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-xs border border-slate-200 flex items-center gap-2";
+          div.innerHTML = `<div class="dot-bounce flex gap-1"><span></span><span></span><span></span></div><span>${escapeHtml(statusText || "MoMo Copilot đang phân tích...")}</span>`;
+          chatFeed.appendChild(div);
+          chatFeed.scrollTop = chatFeed.scrollHeight;
+        }
+      } else if (existing) {
+        existing.remove();
+      }
     }
 
     function showError(msg) {
@@ -228,31 +353,42 @@
 
     function renderAccounts(accounts) {
       const strip = document.getElementById("balancesStrip");
-      strip.innerHTML = (accounts || []).map((a) => `
-        <div class="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm flex items-center justify-between">
-          <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">${a.account_type}</p>
-            <p class="text-sm font-bold text-slate-800 mt-0.5">${a.display_name}</p>
-            <p class="text-[11px] font-mono text-slate-400">${a.account_number}</p>
+      const visible = (accounts || []).filter((a) => a.account_type !== "INTERNAL_SETTLEMENT");
+      strip.innerHTML = visible.map((a) => {
+        const changed = prevBalances[a.id] !== undefined && prevBalances[a.id] !== a.available_balance_vnd;
+        prevBalances[a.id] = a.available_balance_vnd;
+        return `
+          <div class="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm flex items-center justify-between ${changed ? "balance-updated" : ""}">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">${escapeHtml(a.account_type.replace("SIMULATED_", ""))}</p>
+              <p class="text-sm font-bold text-slate-800 mt-0.5">${escapeHtml(a.display_name)}</p>
+              <p class="text-[11px] font-mono text-slate-400">${escapeHtml(a.account_number)}</p>
+            </div>
+            <div class="text-right">
+              <p class="text-base font-extrabold text-pink-600">${fmtVND(a.available_balance_vnd)}</p>
+            </div>
           </div>
-          <div class="text-right">
-            <p class="text-base font-extrabold text-pink-600">${fmtVND(a.available_balance_vnd)}</p>
-          </div>
-        </div>
-      `).join("");
+        `;
+      }).join("");
     }
 
     function appendMessage(role, text, meta = null) {
       const div = document.createElement("div");
       if (role === "user") {
         div.className = "ml-8 bg-pink-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2.5 text-xs shadow-sm";
-        div.innerHTML = `<p>${text}</p>`;
+        const p = document.createElement("p");
+        p.textContent = text;
+        div.appendChild(p);
         if (meta) {
-          div.innerHTML += `<p class="mt-1 text-[10px] text-pink-100 font-mono">${meta}</p>`;
+          const mp = document.createElement("p");
+          mp.className = "mt-1 text-[10px] text-pink-100 font-mono";
+          mp.textContent = meta;
+          div.appendChild(mp);
         }
       } else {
-        div.className = "mr-8 bg-slate-100 text-slate-800 rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-xs border border-slate-200 whitespace-pre-line";
-        div.textContent = text;
+        div.className = "mr-8 bg-slate-100 text-slate-800 rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-xs border border-slate-200 leading-relaxed";
+        div.innerHTML = renderSafeMarkdown(text);
+        speakVietnamese(text);
       }
       chatFeed.appendChild(div);
       chatFeed.scrollTop = chatFeed.scrollHeight;
@@ -265,19 +401,20 @@
         const d = await res.json();
         if (d.status === "ok" && d.stt_ready && d.sandbox_ok) {
           pill.className = "px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-100 text-emerald-800";
-          pill.textContent = "All Systems Ready";
+          pill.textContent = "Ready";
         } else {
           pill.className = "px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-100 text-amber-800";
           pill.textContent = d.sandbox_ok ? "STT Loading" : "Sandbox Offline";
         }
       } catch {
         pill.className = "px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-100 text-red-800";
-        pill.textContent = "Backend Offline";
+        pill.textContent = "Offline";
       }
     }
 
     async function initSession(scenario = "scenario_a") {
       hideError();
+      prevBalances = {};
       try {
         const res = await fetch("/api/session/init", {
           method: "POST",
@@ -304,6 +441,7 @@
       document.getElementById("executionReceipt").classList.add("hidden");
       document.getElementById("splitCard").classList.add("hidden");
       document.getElementById("disambigBox").classList.add("hidden");
+      mobileJumpBanner.classList.add("hidden");
     }
 
     resetBtn.addEventListener("click", async () => {
@@ -313,7 +451,12 @@
 
     scenarioSelect.addEventListener("change", async () => {
       await initSession(scenarioSelect.value);
-      appendMessage("assistant", `Đã chuyển sang ${scenarioSelect.options[scenarioSelect.selectedIndex].text}.`);
+      appendMessage("assistant", `Đã chuyển sang **${scenarioSelect.options[scenarioSelect.selectedIndex].text}**.`);
+    });
+
+    mobileJumpBanner.addEventListener("click", () => {
+      document.getElementById("actionColumn").scrollIntoView({ behavior: "smooth", block: "start" });
+      mobileJumpBanner.classList.add("hidden");
     });
 
     function renderWorkspaceState(data) {
@@ -323,12 +466,19 @@
       const dBox = document.getElementById("disambigBox");
       if (data.ambiguous_contacts && data.ambiguous_contacts.length > 0) {
         dBox.classList.remove("hidden");
-        dBox.innerHTML = `<span class="text-[11px] text-slate-400 self-center mr-1">Chọn nhanh:</span>` +
-          data.ambiguous_contacts.map((c) => `
-            <button onclick="sendText('Chuyển cho ${c.display_name}')" class="px-2.5 py-1 rounded-full bg-pink-50 hover:bg-pink-100 border border-pink-200 text-pink-800 text-[11px] font-semibold">
-              ${c.display_name} (${c.bank_name || "MoMo"} • ${c.phone_number})
-            </button>
-          `).join("");
+        dBox.innerHTML = "";
+        const lbl = document.createElement("span");
+        lbl.className = "text-[11px] text-slate-400 self-center mr-1";
+        lbl.textContent = "Chọn nhanh:";
+        dBox.appendChild(lbl);
+        data.ambiguous_contacts.forEach((c) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "disambig-chip px-2.5 py-1 rounded-full bg-pink-50 hover:bg-pink-100 border border-pink-200 text-pink-800 text-[11px] font-semibold transition";
+          btn.textContent = `${c.display_name} (${c.bank_name || "MoMo"} • ${c.phone_number})`;
+          btn.addEventListener("click", () => sendText(`Chuyển cho ${c.display_name}`));
+          dBox.appendChild(btn);
+        });
       } else {
         dBox.classList.add("hidden");
       }
@@ -345,8 +495,10 @@
         badge.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold " +
           (d.status === "SIMULATED_SUCCESS" ? "bg-emerald-100 text-emerald-800" : "bg-indigo-100 text-indigo-800");
 
-        document.getElementById("dRecipient").textContent = d.recipient_display_name || "Người nhận";
-        document.getElementById("dAccountId").textContent = d.recipient_account_id || "—";
+        const meta = d.recipient_meta || {};
+        document.getElementById("dRecipient").textContent = meta.display_name || d.recipient_display_name || "Người nhận";
+        const subParts = [meta.bank_name, meta.phone_number].filter(Boolean);
+        document.getElementById("dRecipientSub").textContent = subParts.length ? subParts.join(" • ") : "Tài khoản Sandbox";
         document.getElementById("dAmount").textContent = fmtVND(d.amount_vnd);
         document.getElementById("dNote").textContent = d.description || "—";
 
@@ -360,19 +512,19 @@
           const checked = q.id === selectedQuoteId ? "checked" : "";
           const disabled = !q.eligible ? "disabled" : "";
           return `
-            <label class="block p-3 rounded-xl border ${q.recommended ? "border-pink-400 bg-pink-50/40" : "border-slate-200"} ${!q.eligible ? "opacity-50" : "cursor-pointer hover:border-pink-300"}">
+            <label class="block p-3 rounded-xl border ${q.recommended ? "border-pink-400 bg-pink-50/40" : "border-slate-200"} ${!q.eligible ? "opacity-50" : "cursor-pointer hover:border-pink-300"} transition">
               <div class="flex items-start justify-between gap-2">
-                <div class="flex items-center gap-2">
-                  <input type="radio" name="quoteChoice" value="${q.id}" ${checked} ${disabled} onchange="selectedQuoteId='${q.id}'" class="accent-pink-600" />
+                <div class="flex items-center gap-2.5">
+                  <input type="radio" name="quoteChoice" value="${escapeHtml(q.id)}" ${checked} ${disabled} onchange="selectedQuoteId='${escapeHtml(q.id)}'" class="accent-pink-600" />
                   <div>
-                    <div class="flex items-center gap-1.5">
-                      <span class="font-bold text-xs text-slate-900">${q.source_display_name}</span>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <span class="font-bold text-xs text-slate-900">${escapeHtml(q.source_display_name)}</span>
                       ${q.recommended ? `<span class="px-1.5 py-0.5 rounded bg-pink-600 text-white text-[10px] font-bold">Khuyên dùng #1</span>` : ""}
                     </div>
-                    <p class="text-[11px] text-slate-500 mt-0.5">${q.eligibility_reason} • ${(q.applied_offer_names || []).join(", ") || "Không ưu đãi"}</p>
+                    <p class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(q.eligibility_reason)} • ${escapeHtml((q.applied_offer_names || []).join(", ") || "Không ưu đãi")}</p>
                   </div>
                 </div>
-                <div class="text-right text-xs">
+                <div class="text-right text-xs shrink-0">
                   <p class="font-extrabold text-slate-900">Hiệu quả: ${fmtVND(q.effective_cost_vnd)}</p>
                   <p class="text-[10px] text-slate-500">Trừ ngay: ${fmtVND(q.amount_debited_vnd)} | Phí: ${fmtVND(q.fee_vnd)} | Hoàn: ${fmtVND(q.estimated_reward_vnd)}</p>
                 </div>
@@ -381,28 +533,37 @@
           `;
         }).join("");
 
-        const btn = document.getElementById("approveExecuteBtn");
-        btn.disabled = !selectedQuoteId || d.status === "SIMULATED_SUCCESS";
+        document.getElementById("approveExecuteBtn").disabled = !selectedQuoteId || d.status === "SIMULATED_SUCCESS";
+        if (d.status !== "SIMULATED_SUCCESS") {
+          document.getElementById("mobileJumpText").textContent = `Đơn ${fmtVND(d.amount_vnd)} cho ${meta.display_name || d.recipient_display_name || "người nhận"} sẵn sàng`;
+          mobileJumpBanner.classList.remove("hidden");
+        }
       }
 
-      // Split Bill
       if (data.active_split_bill) {
         renderSplitBill(data.active_split_bill);
+        document.getElementById("mobileJumpText").textContent = `Hóa đơn chia nhóm ${fmtVND(data.active_split_bill.total_bill_amount_vnd)} sẵn sàng`;
+        mobileJumpBanner.classList.remove("hidden");
       }
 
-      // Trace & ITN
+      // Telemetry
       const latParts = [];
       if (data.stt_latency_ms != null) latParts.push(`STT ${data.stt_latency_ms}ms`);
-      if (data.llm_latency_ms != null) latParts.push(`Agent ${data.llm_latency_ms}ms`);
+      if (data.llm_latency_ms != null) latParts.push(`Agent ${data.llm_latency_ms}ms (${data.llm_rounds || 1} rounds)`);
       document.getElementById("latencyPill").textContent = latParts.join(" • ");
 
       const itnBox = document.getElementById("itnBox");
       if (data.raw_transcript) {
         itnBox.classList.remove("hidden");
-        itnBox.innerHTML = `
-          <div><span class="text-slate-400">Raw ASR:</span> <span class="text-amber-300">${data.raw_transcript}</span></div>
-          <div><span class="text-slate-400">After ITN:</span> <span class="text-emerald-300">${data.normalized_transcript}</span></div>
-        `;
+        itnBox.innerHTML = "";
+        const d1 = document.createElement("div");
+        d1.innerHTML = `<span class="text-slate-400">Raw ASR:</span> <span class="text-amber-300"></span>`;
+        d1.querySelector("span:last-child").textContent = data.raw_transcript;
+        const d2 = document.createElement("div");
+        d2.innerHTML = `<span class="text-slate-400">After ITN:</span> <span class="text-emerald-300"></span>`;
+        d2.querySelector("span:last-child").textContent = data.normalized_transcript;
+        itnBox.appendChild(d1);
+        itnBox.appendChild(d2);
       }
       document.getElementById("traceBox").textContent = JSON.stringify(data.tool_trace || [], null, 2);
     }
@@ -411,33 +572,47 @@
       const card = document.getElementById("splitCard");
       card.classList.remove("hidden");
       document.getElementById("splitTitle").textContent = `${bill.title} • Tổng: ${fmtVND(bill.total_bill_amount_vnd)}`;
-      document.getElementById("splitStatusBadge").textContent = bill.status;
-      document.getElementById("splitStatusBadge").className =
+      const badge = document.getElementById("splitStatusBadge");
+      badge.textContent = bill.status;
+      badge.className =
         "px-2.5 py-0.5 rounded-full text-[11px] font-bold " +
         (bill.status === "SETTLED" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800");
 
       document.getElementById("splitShares").innerHTML = (bill.participant_shares || []).map((s) => `
         <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
           <div class="flex justify-between items-center">
-            <span class="font-bold text-slate-800">${s.display_name} ${s.is_payer ? "(Payer)" : ""}</span>
-            <span class="text-[10px] font-bold ${s.status === "SETTLED" ? "text-emerald-600" : "text-amber-600"}">${s.status}</span>
+            <span class="font-bold text-slate-800">${escapeHtml(s.display_name)} ${s.is_payer ? "(Payer)" : ""}</span>
+            <span class="text-[10px] font-bold ${s.status === "SETTLED" ? "text-emerald-600" : "text-amber-600"}">${escapeHtml(s.status)}</span>
           </div>
           <p class="text-sm font-extrabold text-pink-600 mt-1">${fmtVND(s.total_share_vnd)}</p>
           <p class="text-[10px] text-slate-400">Còn nợ: ${fmtVND(s.remaining_balance_vnd)}</p>
         </div>
       `).join("");
 
-      document.getElementById("splitCollections").innerHTML = (bill.collection_requests || []).map((cr) => `
-        <div class="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 border border-slate-100">
-          <div>
-            <span class="font-semibold">${cr.participant_name}</span> cần trả <span class="font-bold text-pink-600">${fmtVND(cr.requested_amount_vnd)}</span>
-          </div>
-          ${cr.status === "PAID"
-            ? `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">ĐÃ THANH TOÁN</span>`
-            : `<button onclick="settleSplit('${bill.id}', '${cr.request_id}')" class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold">Giả lập thu tiền</button>`
-          }
-        </div>
-      `).join("");
+      const colDiv = document.getElementById("splitCollections");
+      colDiv.innerHTML = "";
+      (bill.collection_requests || []).forEach((cr) => {
+        const row = document.createElement("div");
+        row.className = "flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 border border-slate-100";
+        const info = document.createElement("div");
+        info.innerHTML = `<span class="font-semibold">${escapeHtml(cr.participant_name)}</span> cần trả <span class="font-bold text-pink-600">${fmtVND(cr.requested_amount_vnd)}</span>`;
+        row.appendChild(info);
+
+        if (cr.status === "PAID") {
+          const span = document.createElement("span");
+          span.className = "px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]";
+          span.textContent = "ĐÃ THANH TOÁN";
+          row.appendChild(span);
+        } else {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold";
+          btn.textContent = "Giả lập thu tiền";
+          btn.addEventListener("click", () => settleSplit(bill.id, cr.request_id));
+          row.appendChild(btn);
+        }
+        colDiv.appendChild(row);
+      });
     }
 
     async function settleSplit(splitId, requestId) {
@@ -458,7 +633,7 @@
     }
 
     document.getElementById("approveExecuteBtn").addEventListener("click", async () => {
-      if (!activeIntentId || !selectedQuoteId) return;
+      if (!activeIntentId || !selectedQuoteId || isBusy) return;
       hideError();
       const btn = document.getElementById("approveExecuteBtn");
       btn.disabled = true;
@@ -482,8 +657,8 @@
         badge.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800";
         const receipt = document.getElementById("executionReceipt");
         receipt.classList.remove("hidden");
-        receipt.innerHTML = `<b>Giao dịch thành công!</b> Mã GD: <code>${ex.transaction_id}</code> • Đã chuyển <b>${fmtVND(ex.amount_transferred_vnd)}</b> (Trừ từ nguồn: <b>${fmtVND(ex.amount_debited_vnd)}</b>). Số dư sổ cái kép đã được cập nhật ở trên.`;
-        appendMessage("assistant", `Bạn đã xác nhận và chuyển thành công ${fmtVND(ex.amount_transferred_vnd)}. Mã giao dịch: ${ex.transaction_id}.`);
+        receipt.innerHTML = `<b>Giao dịch thành công!</b> Mã GD: <code>${escapeHtml(ex.transaction_id)}</code> • Đã chuyển <b>${fmtVND(ex.amount_transferred_vnd)}</b> (Trừ nguồn: <b>${fmtVND(ex.amount_debited_vnd)}</b>).`;
+        appendMessage("assistant", `Bạn đã xác nhận và chuyển thành công **${fmtVND(ex.amount_transferred_vnd)}**. Mã giao dịch: \`${ex.transaction_id}\`.`);
       } catch (err) {
         showError(err.message);
         btn.disabled = false;
@@ -493,25 +668,34 @@
     });
 
     async function sendText(text) {
+      if (isBusy || !text.trim()) return;
       hideError();
-      if (!text.trim() || !currentSessionId) return;
+      if (!currentSessionId) await initSession(scenarioSelect.value);
       appendMessage("user", text);
       chatInput.value = "";
-      sendBtn.disabled = true;
+      setBusy(true, "MoMo Copilot đang xử lý...");
       try {
-        const res = await fetch("/api/chat", {
+        let res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ session_id: currentSessionId, text }),
         });
+        if (res.status === 404) {
+          await initSession(scenarioSelect.value);
+          res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: currentSessionId, text }),
+          });
+        }
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Chat error");
+        setBusy(false);
         appendMessage("assistant", data.assistant_reply);
         renderWorkspaceState(data);
       } catch (err) {
+        setBusy(false);
         showError(err.message);
-      } finally {
-        sendBtn.disabled = false;
       }
     }
 
@@ -521,8 +705,19 @@
       b.addEventListener("click", () => sendText(b.textContent.trim()));
     });
 
-    // Mic recording (16kHz Mono PCM WAV)
-    let isRecording = false, audioCtx = null, mediaStream = null, scriptNode = null, audioChunks = [], inputSampleRate = 48000;
+    // Production Voice Recorder with AudioWorklet/ScriptProcessor fallback + Waveform + Auto-Stop VAD
+    let isRecording = false;
+    let audioCtx = null;
+    let mediaStream = null;
+    let procNode = null;
+    let analyser = null;
+    let audioChunks = [];
+    let inputSampleRate = 48000;
+    let timerInterval = null;
+    let rafId = null;
+    let recSeconds = 0;
+    let hasDetectedSpeech = false;
+    let silenceStartMs = null;
 
     function encodeWav16k(samples, srcRate) {
       let resampled = samples;
@@ -549,7 +744,93 @@
       return new Blob([view], { type: "audio/wav" });
     }
 
+    function drawWaveform() {
+      if (!isRecording || !analyser) return;
+      const ctx = waveformCanvas.getContext("2d");
+      const buf = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(buf);
+      ctx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+
+      const bars = 28;
+      const step = Math.floor(buf.length / bars);
+      const barW = waveformCanvas.width / bars;
+      let energy = 0;
+      for (let i = 0; i < bars; i++) {
+        const val = buf[i * step] / 255;
+        energy += val;
+        const h = Math.max(4, val * waveformCanvas.height);
+        ctx.fillStyle = val > 0.18 ? "#db2777" : "#f472b6";
+        ctx.fillRect(i * barW + 1, (waveformCanvas.height - h) / 2, barW - 3, h);
+      }
+      const avgEnergy = energy / bars;
+      if (avgEnergy > 0.08) {
+        hasDetectedSpeech = true;
+        silenceStartMs = null;
+      } else if (vadToggle.checked && hasDetectedSpeech) {
+        if (silenceStartMs === null) silenceStartMs = performance.now();
+        else if (performance.now() - silenceStartMs > 1600) {
+          stopAndSubmitRecording();
+          return;
+        }
+      }
+      rafId = requestAnimationFrame(drawWaveform);
+    }
+
+    async function cleanupRecorder() {
+      isRecording = false;
+      clearInterval(timerInterval);
+      if (rafId) cancelAnimationFrame(rafId);
+      waveformBar.classList.add("hidden");
+      recordBtn.classList.remove("recording-pulse", "bg-red-600");
+      recordBtn.classList.add("bg-pink-600");
+      if (procNode) procNode.disconnect();
+      if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+      if (audioCtx) await audioCtx.close();
+      procNode = null; mediaStream = null; audioCtx = null; analyser = null;
+    }
+
+    async function stopAndSubmitRecording() {
+      if (!isRecording) return;
+      await cleanupRecorder();
+      const len = audioChunks.reduce((a, c) => a + c.length, 0);
+      if (len === 0) {
+        micStatus.textContent = "Không có dữ liệu âm thanh.";
+        return;
+      }
+      const merged = new Float32Array(len);
+      let off = 0;
+      for (const c of audioChunks) { merged.set(c, off); off += c.length; }
+      const wav = encodeWav16k(merged, inputSampleRate);
+
+      setBusy(true, "Đang chạy VAD + Gipformer ASR + Financial ITN + Agent...");
+      micStatus.textContent = "Đang xử lý giọng nói...";
+      const fd = new FormData();
+      fd.append("session_id", currentSessionId);
+      fd.append("file", wav, "voice.wav");
+      try {
+        const res = await fetch("/api/voice-chat", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Voice error");
+        setBusy(false);
+        appendMessage("user", data.normalized_transcript, `Raw ASR: "${data.raw_transcript}" (${data.stt_latency_ms}ms)`);
+        appendMessage("assistant", data.assistant_reply);
+        renderWorkspaceState(data);
+        micStatus.textContent = "Hoàn tất! Bấm Mic để tiếp tục hội thoại.";
+      } catch (err) {
+        setBusy(false);
+        showError(err.message);
+        micStatus.textContent = "Thử lại: Bấm Mic để nói rõ hơn.";
+      }
+    }
+
+    cancelRecordBtn.addEventListener("click", async () => {
+      audioChunks = [];
+      await cleanupRecorder();
+      micStatus.textContent = "Đã hủy thu âm.";
+    });
+
     recordBtn.addEventListener("click", async () => {
+      if (isBusy && !isRecording) return;
       hideError();
       if (!isRecording) {
         try {
@@ -557,48 +838,58 @@
           audioCtx = new (window.AudioContext || window.webkitAudioContext)();
           inputSampleRate = audioCtx.sampleRate;
           const src = audioCtx.createMediaStreamSource(mediaStream);
-          scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 256;
           audioChunks = [];
-          scriptNode.onaudioprocess = (e) => audioChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-          src.connect(scriptNode);
-          scriptNode.connect(audioCtx.destination);
+
+          // Use AudioWorklet when available, clean fallback to ScriptProcessor
+          if (audioCtx.audioWorklet && window.Blob) {
+            const workletCode = `
+              class PCMRecorder extends AudioWorkletProcessor {
+                process(inputs) {
+                  const ch = inputs[0]?.[0];
+                  if (ch) this.port.postMessage(ch);
+                  return true;
+                }
+              }
+              registerProcessor('pcm-recorder', PCMRecorder);
+            `;
+            const url = URL.createObjectURL(new Blob([workletCode], { type: "application/javascript" }));
+            await audioCtx.audioWorklet.addModule(url);
+            URL.revokeObjectURL(url);
+            procNode = new AudioWorkletNode(audioCtx, "pcm-recorder");
+            procNode.port.onmessage = (e) => audioChunks.push(new Float32Array(e.data));
+          } else {
+            procNode = audioCtx.createScriptProcessor(4096, 1, 1);
+            procNode.onaudioprocess = (e) => audioChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+          }
+
+          src.connect(analyser);
+          src.connect(procNode);
+          procNode.connect(audioCtx.destination);
+
           isRecording = true;
+          hasDetectedSpeech = false;
+          silenceStartMs = null;
+          recSeconds = 0;
+          recordTimer.textContent = "00:00";
+          waveformBar.classList.remove("hidden");
           recordBtn.classList.add("recording-pulse", "bg-red-600");
           recordBtn.classList.remove("bg-pink-600");
-          micStatus.textContent = "Đang thu âm... Bấm lại vào Micro để gửi.";
+          micStatus.textContent = vadToggle.checked
+            ? "Đang nghe... Ngừng nói 1.6s sẽ tự động gửi."
+            : "Đang nghe... Bấm lại vào Micro để gửi.";
+
+          timerInterval = setInterval(() => {
+            recSeconds++;
+            recordTimer.textContent = `${String(Math.floor(recSeconds / 60)).padStart(2, "0")}:${String(recSeconds % 60).padStart(2, "0")}`;
+          }, 1000);
+          drawWaveform();
         } catch (err) {
           showError("Lỗi Microphone: " + err.message);
         }
       } else {
-        isRecording = false;
-        recordBtn.classList.remove("recording-pulse", "bg-red-600");
-        recordBtn.classList.add("bg-pink-600");
-        micStatus.textContent = "Đang chạy VAD + Gipformer STT + Financial ITN + Agent...";
-        if (scriptNode) scriptNode.disconnect();
-        if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
-        if (audioCtx) await audioCtx.close();
-
-        const len = audioChunks.reduce((a, c) => a + c.length, 0);
-        const merged = new Float32Array(len);
-        let off = 0;
-        for (const c of audioChunks) { merged.set(c, off); off += c.length; }
-        const wav = encodeWav16k(merged, inputSampleRate);
-
-        const fd = new FormData();
-        fd.append("session_id", currentSessionId);
-        fd.append("file", wav, "voice.wav");
-        try {
-          const res = await fetch("/api/voice-chat", { method: "POST", body: fd });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.detail || "Voice error");
-          appendMessage("user", data.normalized_transcript, `Raw ASR: "${data.raw_transcript}" (${data.stt_latency_ms}ms)`);
-          appendMessage("assistant", data.assistant_reply);
-          renderWorkspaceState(data);
-          micStatus.textContent = "Hoàn tất! Bấm Mic để tiếp tục hội thoại.";
-        } catch (err) {
-          showError(err.message);
-          micStatus.textContent = "Thử lại: Bấm Mic để nói rõ hơn.";
-        }
+        await stopAndSubmitRecording();
       }
     });
 

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+import json
+from pathlib import Path
+import sqlite3
+import time
 from typing import Any
 
 import httpx
@@ -24,7 +28,7 @@ class SessionState:
     demo_control_token: str
     chat_history: list[dict[str, str]] = field(default_factory=list)
     seen_contacts: dict[str, dict[str, Any]] = field(default_factory=dict)
-    seen_recipient_account_ids: set[str] = field(default_factory=set)
+    seen_recipient_account_ids: list[str] = field(default_factory=list)
     last_contact_search: dict[str, Any] | None = None
     active_draft: dict[str, Any] | None = None
     active_quotes: list[dict[str, Any]] = field(default_factory=list)
@@ -32,20 +36,101 @@ class SessionState:
     ambiguous_contacts: list[dict[str, Any]] = field(default_factory=list)
     last_execution: dict[str, Any] | None = None
 
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, raw: str) -> "SessionState":
+        data = json.loads(raw)
+        return cls(**data)
+
+
+def filter_user_accounts(accounts: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Hide internal sandbox settlement accounts from end-user wallet UI."""
+    if not accounts:
+        return []
+    return [a for a in accounts if a.get("account_type") != "INTERNAL_SETTLEMENT"]
+
 
 class SandboxBridge:
     """Async HTTP bridge connecting Developer B's AI Copilot to Developer A's Fintech Sandbox API.
 
-    Enforces strict token isolation:
-    - Agent tool calls ONLY use `agent_token` (read/draft/quote).
-    - Human approval/execution ONLY uses `user_token` (never exposed to LLM).
-    - Session resets ONLY use `demo_control_token`.
+    Production enhancements:
+    - Persistent httpx.AsyncClient connection pool managed in FastAPI lifespan.
+    - SQLite-backed session persistence (survives restarts/reloads).
+    - Auto-chains create_payment_draft -> get_payment_quotes to eliminate extra LLM round-trip.
+    - Enforces strict token isolation (agent_token vs user_token vs demo_control_token).
     """
 
-    def __init__(self, base_url: str = SANDBOX_BASE_URL, timeout_s: float = 15.0):
+    def __init__(
+        self,
+        base_url: str = SANDBOX_BASE_URL,
+        timeout_s: float = 15.0,
+        db_path: str | Path = "./sessions_state.db",
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
+        self.db_path = Path(db_path)
         self.sessions: dict[str, SessionState] = {}
+        self._client: httpx.AsyncClient | None = None
+        self._init_db()
+
+    def _init_db(self) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS copilot_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    state_json TEXT NOT NULL,
+                    updated_at REAL NOT NULL
+                )
+                """
+            )
+            conn.commit()
+
+    def _save_session(self, state: SessionState) -> None:
+        self.sessions[state.session_id] = state
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO copilot_sessions (session_id, state_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    state_json = excluded.state_json,
+                    updated_at = excluded.updated_at
+                """,
+                (state.session_id, state.to_json(), time.time()),
+            )
+            conn.commit()
+
+    def _load_session(self, session_id: str) -> SessionState | None:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT state_json FROM copilot_sessions WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+        if not row:
+            return None
+        state = SessionState.from_json(row[0])
+        self.sessions[session_id] = state
+        return state
+
+    async def startup(self) -> None:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=self.timeout_s,
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
+            )
+
+    async def shutdown(self) -> None:
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
+    async def _get_client(self) -> tuple[httpx.AsyncClient, bool]:
+        if self._client is not None and not self._client.is_closed:
+            return self._client, False
+        return httpx.AsyncClient(timeout=self.timeout_s), True
 
     async def _request(
         self,
@@ -60,28 +145,39 @@ class SandboxBridge:
         if token:
             headers["Authorization"] = f"Bearer {token}"
 
-        async with httpx.AsyncClient(timeout=self.timeout_s) as client:
+        client, should_close = await self._get_client()
+        try:
             resp = await client.request(method, url, params=params, json=json_data, headers=headers)
-            try:
-                body = resp.json()
-            except Exception:
-                resp.raise_for_status()
-                return {}
+        finally:
+            if should_close:
+                await client.aclose()
 
-            if resp.status_code >= 400 or not body.get("success", False):
-                err = body.get("error") or body.get("detail") or resp.text
-                if isinstance(err, dict):
-                    msg = err.get("message") or str(err)
-                else:
-                    msg = str(err)
-                raise SandboxAPIError(resp.status_code, msg, detail=body)
-            return body.get("data")
+        try:
+            body = resp.json()
+        except Exception:
+            resp.raise_for_status()
+            return {}
+
+        if resp.status_code >= 400 or not body.get("success", False):
+            err = body.get("error") or body.get("detail") or resp.text
+            if isinstance(err, dict):
+                msg = err.get("message") or str(err)
+            else:
+                msg = str(err)
+            raise SandboxAPIError(resp.status_code, msg, detail=body)
+        return body.get("data")
 
     def get_session(self, session_id: str) -> SessionState:
         state = self.sessions.get(session_id)
-        if not state:
-            raise KeyError(f"Unknown session_id: {session_id}")
-        return state
+        if state is not None:
+            return state
+        loaded = self._load_session(session_id)
+        if loaded is not None:
+            return loaded
+        raise KeyError(f"Unknown session_id: {session_id}")
+
+    def save_session(self, state: SessionState) -> None:
+        self._save_session(state)
 
     async def create_session(
         self, scenario: str = "scenario_a", display_name: str = "MoMo Voice Copilot"
@@ -99,7 +195,7 @@ class SandboxBridge:
             user_token=creds["user_token"],
             demo_control_token=creds["demo_control_token"],
         )
-        self.sessions[state.session_id] = state
+        self._save_session(state)
         return state
 
     async def reset_session(self, session_id: str) -> SessionState:
@@ -114,6 +210,7 @@ class SandboxBridge:
         state.active_split_bill = None
         state.ambiguous_contacts = []
         state.last_execution = None
+        self._save_session(state)
         return state
 
     # -------------------------------------------------------------------------
@@ -125,21 +222,32 @@ class SandboxBridge:
         data = await self._request(
             "GET", "/contacts", token=state.agent_token, params={"q": query}
         )
+        seen_ids = set(state.seen_recipient_account_ids)
         for m in data.get("matches", []):
             if m.get("id"):
                 state.seen_contacts[m["id"]] = m
             if m.get("recipient_account_id"):
-                state.seen_recipient_account_ids.add(m["recipient_account_id"])
+                seen_ids.add(m["recipient_account_id"])
+        state.seen_recipient_account_ids = sorted(seen_ids)
         state.last_contact_search = data
-        if data.get("is_ambiguous"):
-            state.ambiguous_contacts = data.get("matches", [])
-        else:
-            state.ambiguous_contacts = []
+        state.ambiguous_contacts = data.get("matches", []) if data.get("is_ambiguous") else []
+        self._save_session(state)
         return data
 
     async def get_payment_sources(self, session_id: str) -> list[dict[str, Any]]:
         state = self.get_session(session_id)
         return await self._request("GET", "/payment-sources", token=state.agent_token)
+
+    def _find_contact_meta(self, state: SessionState, recipient_account_id: str) -> dict[str, Any] | None:
+        for c in state.seen_contacts.values():
+            if c.get("recipient_account_id") == recipient_account_id:
+                return {
+                    "display_name": c.get("display_name"),
+                    "alias": c.get("alias"),
+                    "bank_name": c.get("bank_name") or "Ví MoMo",
+                    "phone_number": c.get("phone_number"),
+                }
+        return None
 
     async def create_payment_draft(
         self,
@@ -150,7 +258,6 @@ class SandboxBridge:
         merchant_id: str | None = None,
     ) -> dict[str, Any]:
         state = self.get_session(session_id)
-        # Resolve if caller passed contact.id instead of recipient_account_id
         resolved_recipient_account_id = recipient_id
         if recipient_id in state.seen_contacts:
             resolved_recipient_account_id = state.seen_contacts[recipient_id]["recipient_account_id"]
@@ -163,14 +270,29 @@ class SandboxBridge:
         if merchant_id:
             payload["merchant_id"] = merchant_id
 
-        data = await self._request(
+        draft = await self._request(
             "POST", "/payment-intents", token=state.agent_token, json_data=payload
         )
-        state.active_draft = data
-        state.active_quotes = data.get("quotes", [])
+        recipient_meta = self._find_contact_meta(state, resolved_recipient_account_id)
+        if recipient_meta:
+            draft["recipient_meta"] = recipient_meta
+
+        # Auto-chain quotes in the same backend call to eliminate an extra LLM round-trip
+        quotes_resp = await self._request(
+            "POST",
+            f"/payment-intents/{draft['id']}/quotes",
+            token=state.agent_token,
+        )
+        quotes = quotes_resp.get("quotes", []) if isinstance(quotes_resp, dict) else quotes_resp
+        draft["quotes"] = quotes
+        draft["status"] = "QUOTED"
+
+        state.active_draft = draft
+        state.active_quotes = quotes
         state.ambiguous_contacts = []
         state.last_execution = None
-        return data
+        self._save_session(state)
+        return {"draft": draft, "quotes": quotes}
 
     async def get_payment_quotes(self, session_id: str, payment_intent_id: str) -> dict[str, Any]:
         state = self.get_session(session_id)
@@ -184,6 +306,7 @@ class SandboxBridge:
         if state.active_draft and state.active_draft.get("id") == payment_intent_id:
             state.active_draft["quotes"] = quotes
             state.active_draft["status"] = "QUOTED"
+        self._save_session(state)
         return {"payment_intent_id": payment_intent_id, "quotes": quotes}
 
     async def create_split_bill(
@@ -194,6 +317,7 @@ class SandboxBridge:
             "POST", "/split-bills", token=state.agent_token, json_data=payload
         )
         state.active_split_bill = data
+        self._save_session(state)
         return data
 
     async def get_transaction_history(
@@ -213,7 +337,8 @@ class SandboxBridge:
 
     async def get_account_snapshot(self, session_id: str) -> list[dict[str, Any]]:
         state = self.get_session(session_id)
-        return await self._request("GET", "/me/accounts", token=state.user_token)
+        accounts = await self._request("GET", "/me/accounts", token=state.user_token)
+        return filter_user_accounts(accounts)
 
     async def approve_and_execute_payment(
         self,
@@ -240,6 +365,7 @@ class SandboxBridge:
         state.last_execution = execution
         if state.active_draft and state.active_draft.get("id") == payment_intent_id:
             state.active_draft["status"] = execution.get("status", "SIMULATED_SUCCESS")
+        self._save_session(state)
         return {
             "approval": approval,
             "execution": execution,
@@ -260,4 +386,5 @@ class SandboxBridge:
             "GET", f"/split-bills/{split_id}", token=state.user_token
         )
         state.active_split_bill = updated_bill
+        self._save_session(state)
         return {"settlement": res, "split_bill": updated_bill}
