@@ -27,8 +27,15 @@ copilot_agent: FintechCopilotAgent | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global copilot_agent
-    stt_service.load()
-    copilot_agent = FintechCopilotAgent(bridge=sandbox_bridge)
+    try:
+        stt_service.load()
+    except Exception as exc:
+        print(f"⚠️ [Voice Copilot] STT load warning: {exc}")
+    try:
+        copilot_agent = FintechCopilotAgent(bridge=sandbox_bridge)
+    except Exception as exc:
+        print(f"⚠️ [Voice Copilot] Agent init warning (GEMINI_API_KEY may be missing): {exc}")
+        copilot_agent = None
     yield
 
 
@@ -160,7 +167,15 @@ async def get_accounts(session_id: str):
 async def chat_turn(req: ChatRequest):
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Empty text")
-    agent = copilot_agent or FintechCopilotAgent(bridge=sandbox_bridge)
+    agent = copilot_agent
+    if not agent:
+        try:
+            agent = FintechCopilotAgent(bridge=sandbox_bridge)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm GEMINI_API_KEY vào file .env rồi khởi động lại server.",
+            ) from exc
     t0 = time.perf_counter()
     try:
         normalized_text = normalize_vietnamese_financial_itn(req.text.strip())
@@ -189,7 +204,15 @@ async def voice_chat_turn(
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file")
 
-    agent = copilot_agent or FintechCopilotAgent(bridge=sandbox_bridge)
+    agent = copilot_agent
+    if not agent:
+        try:
+            agent = FintechCopilotAgent(bridge=sandbox_bridge)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm GEMINI_API_KEY vào file .env rồi khởi động lại server.",
+            ) from exc
     t0 = time.perf_counter()
     try:
         raw_text, norm_text, stt_ms, stats = stt_service.transcribe_audio_bytes(audio_bytes)
