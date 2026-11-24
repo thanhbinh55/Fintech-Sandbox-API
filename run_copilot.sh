@@ -16,3 +16,4 @@ echo "=========================================================="
 
 export PYTHONPATH="voice_copilot"
 exec .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 7860 --app-dir voice_copilot --reload
+

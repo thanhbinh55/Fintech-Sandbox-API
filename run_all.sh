@@ -28,7 +28,13 @@ echo "Đang khởi động Fintech Sandbox API (cổng 8000)..."
 
 sleep 2
 
+# Tự động mở trình duyệt trên macOS
+if command -v open >/dev/null 2>&1; then
+  (sleep 2 && open "http://localhost:7860") &
+fi
+
 # Start Frontend Voice Copilot
 echo "Đang khởi động MoMo Voice AI Copilot (cổng 7860)..."
 export PYTHONPATH="voice_copilot"
 .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 7860 --app-dir voice_copilot
+
